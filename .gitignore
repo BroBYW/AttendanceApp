@@ -1,0 +1,55 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+build/
+.kotlin/
+
+# Local configuration file (contains sdk path, etc)
+local.properties
+
+# Android Studio
+*.iml
+.idea/
+*.iws
+.navigation/
+captures/
+
+# Keystore files (keep them safe!)
+*.jks
+*.keystore
+
+# External native build
+.externalNativeBuild/
+.cxx/
+
+# Google Services (contains API keys)
+# google-services.json
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Log files
+*.log
+
+# Signing config
+signing.properties

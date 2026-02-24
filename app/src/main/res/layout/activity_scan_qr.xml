@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.budiyev.android.codescanner.CodeScannerView
+        android:id="@+id/scanner_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:autoFocusButtonColor="@android:color/white"
+        app:autoFocusButtonVisible="true"
+        app:flashButtonColor="@android:color/white"
+        app:flashButtonVisible="true"
+        app:frameColor="@android:color/white"
+        app:frameThickness="2dp"
+        app:frameVerticalBias="0.5"
+        app:maskColor="#77000000" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Scan QR Code"
+        android:textColor="#ffffff"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="32dp" />
+
+    <!-- Back Button (top-left) -->
+    <ImageButton
+        android:id="@+id/btnBack"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="16dp"
+        android:background="@android:color/transparent"
+        android:contentDescription="Go back"
+        android:src="@android:drawable/ic_menu_revert"
+        android:scaleType="centerInside"
+        app:tint="@android:color/white" />
+
+    <!-- Scan from Gallery Button (bottom-center) -->
+    <Button
+        android:id="@+id/btnScanFromGallery"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="48dp"
+        android:text="📷  Scan from Gallery"
+        android:textColor="#ffffff"
+        android:backgroundTint="#88000000"
+        android:padding="12dp" />
+
+</FrameLayout>
