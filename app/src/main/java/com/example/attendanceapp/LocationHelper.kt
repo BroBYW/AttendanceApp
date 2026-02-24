@@ -55,22 +55,8 @@ class LocationHelper(private val context: Context) {
             return
         }
 
-        try {
-            // First try to get the last known location for a quick result
-            fusedLocationClient.lastLocation.addOnSuccessListener { lastLocation ->
-                if (lastLocation != null) {
-                    listener.onLocationReceived(lastLocation)
-                } else {
-                    // No last known location, request a fresh one
-                    requestFreshLocation(listener)
-                }
-            }.addOnFailureListener {
-                // Last location failed, try fresh request
-                requestFreshLocation(listener)
-            }
-        } catch (e: SecurityException) {
-            listener.onLocationError("Location permission denied")
-        }
+        // Always request a fresh location fix for accuracy
+        requestFreshLocation(listener)
     }
 
     /**
