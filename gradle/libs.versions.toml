@@ -18,6 +18,7 @@ codeScanner = "2.3.2"
 material = "1.12.0"
 lottie = "6.4.0"
 cardview = "1.0.0"
+splashscreen = "1.0.1"
 
 [libraries]
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
@@ -44,6 +45,7 @@ code-scanner = { group = "com.github.yuriy-budiyev", name = "code-scanner", vers
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
 lottie = { group = "com.airbnb.android", name = "lottie", version.ref = "lottie" }
 androidx-cardview = { group = "androidx.cardview", name = "cardview", version.ref = "cardview" }
+androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

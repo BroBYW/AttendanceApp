@@ -58,6 +58,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.lottie)
     implementation(libs.androidx.cardview)
+    implementation(libs.androidx.splashscreen)
 
     // Testing Dependencies
     testImplementation(libs.junit)

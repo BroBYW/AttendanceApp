@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -35,6 +36,17 @@ class MainActivity : AppCompatActivity() {
         tvClock = findViewById(R.id.tvClock)
         tvDate = findViewById(R.id.tvDate)
 
+        // User profile greeting
+        val tvGreeting = findViewById<TextView>(R.id.tvGreeting)
+        val username = intent.getStringExtra("username") ?: "User"
+        tvGreeting.text = "Hi, $username 👋"
+
+        // Logout button
+        val btnLogout = findViewById<MaterialButton>(R.id.btnLogout)
+        btnLogout.setOnClickListener {
+            showLogoutDialog()
+        }
+
         val btnStartCheckIn = findViewById<MaterialButton>(R.id.btnStartCheckIn)
         btnStartCheckIn.setOnClickListener {
             startActivity(Intent(this, ScanQrActivity::class.java))
@@ -45,6 +57,21 @@ class MainActivity : AppCompatActivity() {
 
         // Start the live clock
         updateClock()
+    }
+
+    private fun showLogoutDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Logout")
+            .setMessage("Are you sure you want to logout?")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Logout") { _, _ ->
+                // Navigate back to login
+                val intent = Intent(this, LoginActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            }
+            .show()
     }
 
     private fun setupAttendanceHistory() {
