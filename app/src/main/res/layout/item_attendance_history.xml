@@ -17,12 +17,13 @@
         android:orientation="horizontal"
         android:padding="16dp">
 
-        <!-- Status Indicator -->
-        <View
-            android:id="@+id/viewStatusIndicator"
-            android:layout_width="4dp"
-            android:layout_height="48dp"
-            android:background="@color/success" />
+        <!-- Status Icon -->
+        <ImageView
+            android:id="@+id/ivStatusIcon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:contentDescription="Status"
+            android:src="@drawable/ic_check_circle" />
 
         <!-- Details -->
         <LinearLayout

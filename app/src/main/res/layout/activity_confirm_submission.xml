@@ -187,6 +187,22 @@
                     android:layout_marginTop="4dp"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="12sp" />
+
+                <!-- Map View -->
+                <com.google.android.material.card.MaterialCardView
+                    android:id="@+id/cardMap"
+                    android:layout_width="match_parent"
+                    android:layout_height="180dp"
+                    android:layout_marginTop="12dp"
+                    android:visibility="gone"
+                    app:cardCornerRadius="12dp"
+                    app:cardElevation="0dp">
+
+                    <org.osmdroid.views.MapView
+                        android:id="@+id/mapView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -220,15 +236,16 @@
             app:strokeColor="@color/card_stroke"
             app:strokeWidth="1dp" />
 
-        <!-- Lottie Animation Overlay (hidden by default) -->
-        <com.airbnb.lottie.LottieAnimationView
-            android:id="@+id/lottieSuccess"
-            android:layout_width="150dp"
-            android:layout_height="150dp"
-            android:layout_gravity="center"
+        <!-- Success Icon Overlay (hidden by default) -->
+        <ImageView
+            android:id="@+id/ivSuccessOverlay"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp"
             android:visibility="gone"
-            app:lottie_autoPlay="false"
-            app:lottie_loop="false" />
+            android:contentDescription="Success"
+            android:src="@drawable/ic_success_circle" />
 
     </LinearLayout>
 </ScrollView>

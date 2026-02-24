@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.lottie)
     implementation(libs.androidx.cardview)
     implementation(libs.androidx.splashscreen)
+    implementation(libs.osmdroid)
 
     // Testing Dependencies
     testImplementation(libs.junit)

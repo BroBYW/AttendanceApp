@@ -3,6 +3,7 @@ package com.example.attendanceapp
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
@@ -12,7 +13,7 @@ class AttendanceHistoryAdapter(
 ) : RecyclerView.Adapter<AttendanceHistoryAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val viewStatusIndicator: View = view.findViewById(R.id.viewStatusIndicator)
+        val ivStatusIcon: ImageView = view.findViewById(R.id.ivStatusIcon)
         val tvDate: TextView = view.findViewById(R.id.tvHistoryDate)
         val tvLocation: TextView = view.findViewById(R.id.tvHistoryLocation)
         val tvTime: TextView = view.findViewById(R.id.tvHistoryTime)
@@ -37,23 +38,17 @@ class AttendanceHistoryAdapter(
             AttendanceRecord.Status.ON_TIME -> {
                 holder.tvStatus.text = "On Time"
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.success))
-                holder.viewStatusIndicator.setBackgroundColor(
-                    ContextCompat.getColor(context, R.color.success)
-                )
+                holder.ivStatusIcon.setImageResource(R.drawable.ic_check_circle)
             }
             AttendanceRecord.Status.LATE -> {
                 holder.tvStatus.text = "Late"
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.warning))
-                holder.viewStatusIndicator.setBackgroundColor(
-                    ContextCompat.getColor(context, R.color.warning)
-                )
+                holder.ivStatusIcon.setImageResource(R.drawable.ic_warning)
             }
             AttendanceRecord.Status.ABSENT -> {
                 holder.tvStatus.text = "Absent"
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.error))
-                holder.viewStatusIndicator.setBackgroundColor(
-                    ContextCompat.getColor(context, R.color.error)
-                )
+                holder.ivStatusIcon.setImageResource(R.drawable.ic_cancel)
             }
         }
     }

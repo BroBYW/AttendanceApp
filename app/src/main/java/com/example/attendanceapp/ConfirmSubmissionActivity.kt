@@ -12,12 +12,17 @@ import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.airbnb.lottie.LottieAnimationView
+import android.view.animation.AnimationUtils
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 
 class ConfirmSubmissionActivity : AppCompatActivity() {
 
@@ -32,7 +37,9 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
     private lateinit var tvLocationAccuracy: TextView
     private lateinit var progressLocation: ProgressBar
     private lateinit var btnSubmit: MaterialButton
-    private lateinit var lottieSuccess: LottieAnimationView
+    private lateinit var ivSuccessOverlay: ImageView
+    private lateinit var mapView: MapView
+    private lateinit var cardMap: MaterialCardView
 
     // Permission request launcher
     private val requestLocationPermission = registerForActivityResult(
@@ -53,7 +60,19 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize osmdroid configuration
+        Configuration.getInstance().load(this, getSharedPreferences("osmdroid", MODE_PRIVATE))
+        Configuration.getInstance().userAgentValue = packageName
+
         setContentView(R.layout.activity_confirm_submission)
+
+        // Initialize map
+        mapView = findViewById(R.id.mapView)
+        cardMap = findViewById(R.id.cardMap)
+        mapView.setTileSource(TileSourceFactory.MAPNIK)
+        mapView.setMultiTouchControls(true)
+        mapView.controller.setZoom(17.0)
 
         // Initialize location helper
         locationHelper = LocationHelper(this)
@@ -78,8 +97,7 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         progressLocation = findViewById(R.id.progressLocation)
 
         // Lottie animation
-        lottieSuccess = findViewById(R.id.lottieSuccess)
-        lottieSuccess.setAnimation(R.raw.success_checkmark)
+        ivSuccessOverlay = findViewById(R.id.ivSuccessOverlay)
 
         // Submit button (starts disabled until location is fetched)
         btnSubmit = findViewById(R.id.btnSubmit)
@@ -127,6 +145,9 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
                     "Accuracy: ±%.1f meters", location.accuracy
                 )
 
+                // Show map with marker
+                showLocationOnMap(location.latitude, location.longitude)
+
                 // Enable submit button now that location is ready
                 btnSubmit.isEnabled = true
             }
@@ -146,31 +167,57 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         btnSubmit.isEnabled = false
 
         // Show Lottie success animation
-        lottieSuccess.visibility = View.VISIBLE
-        lottieSuccess.playAnimation()
+        ivSuccessOverlay.visibility = View.VISIBLE
+        val popIn = AnimationUtils.loadAnimation(this, R.anim.pop_in)
+        ivSuccessOverlay.startAnimation(popIn)
 
         val locationText = if (currentLatitude != null && currentLongitude != null) {
-            "Location: $currentLatitude, $currentLongitude (±${currentAccuracy}m)"
+            String.format("%.4f, %.4f", currentLatitude, currentLongitude)
         } else {
-            "Location: not available"
+            "Recorded"
         }
 
         // TODO: Implement actual submission logic (e.g., send data to a server)
-        Toast.makeText(
-            this,
-            "Attendance submitted successfully!",
-            Toast.LENGTH_SHORT
-        ).show()
 
-        // Wait for animation to finish, then close
+        // Wait for animation briefly, then navigate to success page
         Handler(Looper.getMainLooper()).postDelayed({
-            finishAffinity()
-        }, 2000)
+            val intent = Intent(this, SuccessActivity::class.java).apply {
+                putExtra("location", locationText)
+            }
+            startActivity(intent)
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+            finish()
+        }, 1500)
+    }
+
+    private fun showLocationOnMap(latitude: Double, longitude: Double) {
+        val point = GeoPoint(latitude, longitude)
+        mapView.controller.setCenter(point)
+
+        val marker = Marker(mapView)
+        marker.position = point
+        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        marker.title = "Your Location"
+        mapView.overlays.add(marker)
+        mapView.invalidate()
+
+        cardMap.visibility = View.VISIBLE
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mapView.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        mapView.onPause()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         locationHelper.stopLocationUpdates()
+        mapView.onDetach()
     }
 
     // Re-check location when user returns from Settings
