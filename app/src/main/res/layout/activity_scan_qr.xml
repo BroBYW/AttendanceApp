@@ -8,37 +8,34 @@
         android:id="@+id/scanner_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:autoFocusButtonColor="@android:color/white"
         app:autoFocusButtonVisible="false"
-        app:flashButtonColor="@android:color/white"
         app:flashButtonVisible="false"
-        app:frameColor="@android:color/white"
-        app:frameThickness="2dp"
+        app:frameColor="@color/scanner_frame"
+        app:frameThickness="3dp"
+        app:frameCornersSize="50dp"
         app:frameVerticalBias="0.5"
-        app:maskColor="#77000000" />
+        app:maskColor="@color/scanner_mask" />
 
-    <!-- Top bar overlay -->
+    <!-- Top Bar: Back + Title + Flash -->
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:layout_marginTop="48dp"
+        android:layout_marginTop="44dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
+        android:paddingHorizontal="8dp"
         android:elevation="10dp">
 
-        <!-- Back Button -->
         <ImageButton
             android:id="@+id/btnBack"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Go back"
-            android:src="@android:drawable/ic_menu_revert"
-            android:scaleType="centerInside"
-            app:tint="@android:color/white" />
+            android:src="@drawable/ic_arrow_back"
+            android:scaleType="centerInside" />
 
         <TextView
             android:layout_width="0dp"
@@ -46,33 +43,58 @@
             android:layout_weight="1"
             android:gravity="center"
             android:text="Scan QR Code"
-            android:textColor="#ffffff"
+            android:textColor="@color/white"
             android:textSize="18sp"
             android:textStyle="bold" />
 
-        <!-- Flash Toggle Button -->
         <ImageButton
             android:id="@+id/btnFlash"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Toggle flash"
-            android:src="@android:drawable/btn_star_big_off"
-            android:scaleType="centerInside"
-            app:tint="@android:color/white" />
+            android:src="@drawable/ic_flash_off"
+            android:scaleType="centerInside" />
     </LinearLayout>
 
-    <!-- Scan from Gallery Button (bottom-center) -->
-    <Button
-        android:id="@+id/btnScanFromGallery"
+    <!-- Scan Instruction Chip -->
+    <com.google.android.material.card.MaterialCardView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="100dp"
+        app:cardBackgroundColor="#99000000"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="0dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="Point camera at QR code"
+            android:textColor="@color/white"
+            android:textSize="13sp" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Scan from Gallery Button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnScanFromGallery"
+        style="@style/Widget.Material3.Button.OutlinedButton"
+        android:layout_width="wrap_content"
+        android:layout_height="48dp"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="48dp"
-        android:text="📷  Scan from Gallery"
-        android:textColor="#ffffff"
-        android:backgroundTint="#88000000"
-        android:padding="12dp"
-        android:elevation="10dp" />
+        android:text="Scan from Gallery"
+        android:textAllCaps="false"
+        android:textColor="@color/white"
+        android:elevation="10dp"
+        app:cornerRadius="24dp"
+        app:icon="@drawable/ic_gallery"
+        app:iconGravity="textStart"
+        app:iconSize="20dp"
+        app:iconTint="@color/white"
+        app:strokeColor="@color/white"
+        app:strokeWidth="1dp" />
 
 </FrameLayout>

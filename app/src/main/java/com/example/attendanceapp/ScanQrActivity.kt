@@ -42,7 +42,7 @@ class ScanQrActivity : AppCompatActivity() {
 
         // Bring overlay buttons to front so they receive touches above the scanner
         findViewById<LinearLayout>(R.id.topBar).bringToFront()
-        findViewById<Button>(R.id.btnScanFromGallery).bringToFront()
+        findViewById<com.google.android.material.button.MaterialButton>(R.id.btnScanFromGallery).bringToFront()
 
         // Back button
         val btnBack = findViewById<ImageButton>(R.id.btnBack)
@@ -55,11 +55,15 @@ class ScanQrActivity : AppCompatActivity() {
         btnFlash.setOnClickListener {
             if (::codeScanner.isInitialized) {
                 codeScanner.isFlashEnabled = !codeScanner.isFlashEnabled
+                btnFlash.setImageResource(
+                    if (codeScanner.isFlashEnabled) R.drawable.ic_flash_on
+                    else R.drawable.ic_flash_off
+                )
             }
         }
 
         // Scan from gallery button
-        val btnScanFromGallery = findViewById<Button>(R.id.btnScanFromGallery)
+        val btnScanFromGallery = findViewById<com.google.android.material.button.MaterialButton>(R.id.btnScanFromGallery)
         btnScanFromGallery.setOnClickListener {
             pickImageLauncher.launch("image/*")
         }

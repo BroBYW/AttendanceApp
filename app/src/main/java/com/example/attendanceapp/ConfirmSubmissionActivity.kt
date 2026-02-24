@@ -4,14 +4,17 @@ import android.Manifest
 import android.location.Location
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
-import android.widget.Button
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.airbnb.lottie.LottieAnimationView
+import com.google.android.material.button.MaterialButton
 
 class ConfirmSubmissionActivity : AppCompatActivity() {
 
@@ -25,6 +28,8 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
     private lateinit var tvLocationValue: TextView
     private lateinit var tvLocationAccuracy: TextView
     private lateinit var progressLocation: ProgressBar
+    private lateinit var btnSubmit: MaterialButton
+    private lateinit var lottieSuccess: LottieAnimationView
 
     // Permission request launcher
     private val requestLocationPermission = registerForActivityResult(
@@ -38,6 +43,8 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
             progressLocation.visibility = View.GONE
             tvLocationValue.text = "Location permission denied"
             tvLocationAccuracy.text = "Please enable location to record attendance"
+            // Still allow submission without location
+            btnSubmit.isEnabled = true
         }
     }
 
@@ -67,14 +74,19 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         tvLocationAccuracy = findViewById(R.id.tvLocationAccuracy)
         progressLocation = findViewById(R.id.progressLocation)
 
-        // Submit button
-        val btnSubmit = findViewById<Button>(R.id.btnSubmit)
+        // Lottie animation
+        lottieSuccess = findViewById(R.id.lottieSuccess)
+        lottieSuccess.setAnimation(R.raw.success_checkmark)
+
+        // Submit button (starts disabled until location is fetched)
+        btnSubmit = findViewById(R.id.btnSubmit)
+        btnSubmit.isEnabled = false
         btnSubmit.setOnClickListener {
             submitAttendance()
         }
 
         // Retake photo button
-        val btnRetake = findViewById<Button>(R.id.btnRetake)
+        val btnRetake = findViewById<MaterialButton>(R.id.btnRetake)
         btnRetake.setOnClickListener {
             finish()
         }
@@ -111,17 +123,29 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
                 tvLocationAccuracy.text = String.format(
                     "Accuracy: ±%.1f meters", location.accuracy
                 )
+
+                // Enable submit button now that location is ready
+                btnSubmit.isEnabled = true
             }
 
             override fun onLocationError(message: String) {
                 progressLocation.visibility = View.GONE
                 tvLocationValue.text = "Location unavailable"
                 tvLocationAccuracy.text = message
+                // Still allow submission without location
+                btnSubmit.isEnabled = true
             }
         })
     }
 
     private fun submitAttendance() {
+        // Disable button to prevent double-submission
+        btnSubmit.isEnabled = false
+
+        // Show Lottie success animation
+        lottieSuccess.visibility = View.VISIBLE
+        lottieSuccess.playAnimation()
+
         val locationText = if (currentLatitude != null && currentLongitude != null) {
             "Location: $currentLatitude, $currentLongitude (±${currentAccuracy}m)"
         } else {
@@ -131,12 +155,14 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         // TODO: Implement actual submission logic (e.g., send data to a server)
         Toast.makeText(
             this,
-            "Attendance submitted!\nQR: $qrCode\n$locationText",
-            Toast.LENGTH_LONG
+            "Attendance submitted successfully!",
+            Toast.LENGTH_SHORT
         ).show()
 
-        // Return to the main screen
-        finishAffinity()
+        // Wait for animation to finish, then close
+        Handler(Looper.getMainLooper()).postDelayed({
+            finishAffinity()
+        }, 2000)
     }
 
     override fun onDestroy() {

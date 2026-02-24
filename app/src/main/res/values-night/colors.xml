@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Brand: Deep Navy (lighter for dark mode) -->
+    <color name="primary">#FF60A5FA</color>
+    <color name="primary_variant">#FF3B82F6</color>
+    <color name="on_primary">#FF0F1923</color>
+
+    <!-- Secondary Brand: Emerald Green -->
+    <color name="secondary">#FF34D399</color>
+    <color name="secondary_variant">#FF10B981</color>
+    <color name="on_secondary">#FF0F1923</color>
+
+    <!-- Background & Surface -->
+    <color name="background">#FF0F172A</color>
+    <color name="surface">#FF1E293B</color>
+    <color name="on_background">#FFE2E8F0</color>
+    <color name="on_surface">#FFE2E8F0</color>
+    <color name="on_surface_variant">#FF94A3B8</color>
+
+    <!-- Error -->
+    <color name="error">#FFEF4444</color>
+    <color name="on_error">#FF0F1923</color>
+
+    <!-- Status Colors -->
+    <color name="success">#FF34D399</color>
+    <color name="warning">#FFFBBF24</color>
+
+    <!-- Scanner Overlay -->
+    <color name="scanner_mask">#CC0F172A</color>
+    <color name="scanner_frame">#FF34D399</color>
+
+    <!-- Card -->
+    <color name="card_background">#FF1E293B</color>
+    <color name="card_stroke">#FF334155</color>
+
+    <!-- Divider -->
+    <color name="divider">#FF334155</color>
+</resources>
