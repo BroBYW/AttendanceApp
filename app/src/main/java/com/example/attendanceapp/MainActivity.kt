@@ -6,6 +6,8 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -22,7 +24,7 @@ class MainActivity : AppCompatActivity() {
     private val clockRunnable = object : Runnable {
         override fun run() {
             updateClock()
-            handler.postDelayed(this, 1000) // Update every second
+            handler.postDelayed(this, 1000)
         }
     }
 
@@ -38,8 +40,53 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, ScanQrActivity::class.java))
         }
 
+        // Set up attendance history
+        setupAttendanceHistory()
+
         // Start the live clock
         updateClock()
+    }
+
+    private fun setupAttendanceHistory() {
+        val rvHistory = findViewById<RecyclerView>(R.id.rvAttendanceHistory)
+        rvHistory.layoutManager = LinearLayoutManager(this)
+        rvHistory.isNestedScrollingEnabled = false
+
+        // Sample data (replace with real data from backend later)
+        val sampleRecords = listOf(
+            AttendanceRecord(
+                date = "24 Feb 2026",
+                time = "06:45 AM",
+                status = AttendanceRecord.Status.ON_TIME,
+                location = "Lat: 3.1390, Lng: 101.6869"
+            ),
+            AttendanceRecord(
+                date = "23 Feb 2026",
+                time = "06:52 AM",
+                status = AttendanceRecord.Status.ON_TIME,
+                location = "Lat: 3.1390, Lng: 101.6869"
+            ),
+            AttendanceRecord(
+                date = "22 Feb 2026",
+                time = "07:15 AM",
+                status = AttendanceRecord.Status.LATE,
+                location = "Lat: 3.1391, Lng: 101.6870"
+            ),
+            AttendanceRecord(
+                date = "21 Feb 2026",
+                time = "06:30 AM",
+                status = AttendanceRecord.Status.ON_TIME,
+                location = "Lat: 3.1389, Lng: 101.6868"
+            ),
+            AttendanceRecord(
+                date = "20 Feb 2026",
+                time = "—",
+                status = AttendanceRecord.Status.ABSENT,
+                location = "No location recorded"
+            )
+        )
+
+        rvHistory.adapter = AttendanceHistoryAdapter(sampleRecords)
     }
 
     private fun updateClock() {

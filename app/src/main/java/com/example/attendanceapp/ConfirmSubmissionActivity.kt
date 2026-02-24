@@ -1,17 +1,20 @@
 package com.example.attendanceapp
 
 import android.Manifest
+import android.content.Intent
 import android.location.Location
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.View
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.airbnb.lottie.LottieAnimationView
 import com.google.android.material.button.MaterialButton
@@ -41,10 +44,10 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
             fetchLocation()
         } else {
             progressLocation.visibility = View.GONE
-            tvLocationValue.text = "Location permission denied"
-            tvLocationAccuracy.text = "Please enable location to record attendance"
-            // Still allow submission without location
-            btnSubmit.isEnabled = true
+            tvLocationValue.text = "⛔ Location permission denied"
+            tvLocationAccuracy.text = "Location is required to submit attendance"
+            btnSubmit.isEnabled = false
+            showLocationRequiredDialog()
         }
     }
 
@@ -130,10 +133,10 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
 
             override fun onLocationError(message: String) {
                 progressLocation.visibility = View.GONE
-                tvLocationValue.text = "Location unavailable"
+                tvLocationValue.text = "⛔ Location unavailable"
                 tvLocationAccuracy.text = message
-                // Still allow submission without location
-                btnSubmit.isEnabled = true
+                btnSubmit.isEnabled = false
+                showLocationRequiredDialog()
             }
         })
     }
@@ -168,5 +171,46 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         locationHelper.stopLocationUpdates()
+    }
+
+    // Re-check location when user returns from Settings
+    private val settingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (locationHelper.hasLocationPermission()) {
+            fetchLocation()
+        } else {
+            showLocationRequiredDialog()
+        }
+    }
+
+    private fun showLocationRequiredDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("📍 Location Required")
+            .setMessage(
+                "Location access is mandatory to submit attendance. " +
+                "Your GPS coordinates are recorded to verify you are at the correct location.\n\n" +
+                "Please enable Location permission in Settings."
+            )
+            .setCancelable(false)
+            .setPositiveButton("Open Settings") { _, _ ->
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", packageName, null)
+                }
+                settingsLauncher.launch(intent)
+            }
+            .setNegativeButton("Retry") { _, _ ->
+                if (locationHelper.hasLocationPermission()) {
+                    fetchLocation()
+                } else {
+                    requestLocationPermission.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                }
+            }
+            .show()
     }
 }
