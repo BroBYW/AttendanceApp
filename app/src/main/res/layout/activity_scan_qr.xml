@@ -9,36 +9,58 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:autoFocusButtonColor="@android:color/white"
-        app:autoFocusButtonVisible="true"
+        app:autoFocusButtonVisible="false"
         app:flashButtonColor="@android:color/white"
-        app:flashButtonVisible="true"
+        app:flashButtonVisible="false"
         app:frameColor="@android:color/white"
         app:frameThickness="2dp"
         app:frameVerticalBias="0.5"
         app:maskColor="#77000000" />
 
-    <TextView
-        android:layout_width="wrap_content"
+    <!-- Top bar overlay -->
+    <LinearLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Scan QR Code"
-        android:textColor="#ffffff"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="32dp" />
+        android:layout_gravity="top"
+        android:layout_marginTop="48dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:elevation="10dp">
 
-    <!-- Back Button (top-left) -->
-    <ImageButton
-        android:id="@+id/btnBack"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_gravity="top|start"
-        android:layout_margin="16dp"
-        android:background="@android:color/transparent"
-        android:contentDescription="Go back"
-        android:src="@android:drawable/ic_menu_revert"
-        android:scaleType="centerInside"
-        app:tint="@android:color/white" />
+        <!-- Back Button -->
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Go back"
+            android:src="@android:drawable/ic_menu_revert"
+            android:scaleType="centerInside"
+            app:tint="@android:color/white" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="Scan QR Code"
+            android:textColor="#ffffff"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- Flash Toggle Button -->
+        <ImageButton
+            android:id="@+id/btnFlash"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Toggle flash"
+            android:src="@android:drawable/btn_star_big_off"
+            android:scaleType="centerInside"
+            app:tint="@android:color/white" />
+    </LinearLayout>
 
     <!-- Scan from Gallery Button (bottom-center) -->
     <Button
@@ -50,6 +72,7 @@
         android:text="📷  Scan from Gallery"
         android:textColor="#ffffff"
         android:backgroundTint="#88000000"
-        android:padding="12dp" />
+        android:padding="12dp"
+        android:elevation="10dp" />
 
 </FrameLayout>

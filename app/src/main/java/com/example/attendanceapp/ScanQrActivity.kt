@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -39,10 +40,22 @@ class ScanQrActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_scan_qr)
 
+        // Bring overlay buttons to front so they receive touches above the scanner
+        findViewById<LinearLayout>(R.id.topBar).bringToFront()
+        findViewById<Button>(R.id.btnScanFromGallery).bringToFront()
+
         // Back button
         val btnBack = findViewById<ImageButton>(R.id.btnBack)
         btnBack.setOnClickListener {
             finish()
+        }
+
+        // Flash toggle button
+        val btnFlash = findViewById<ImageButton>(R.id.btnFlash)
+        btnFlash.setOnClickListener {
+            if (::codeScanner.isInitialized) {
+                codeScanner.isFlashEnabled = !codeScanner.isFlashEnabled
+            }
         }
 
         // Scan from gallery button
@@ -87,10 +100,6 @@ class ScanQrActivity : AppCompatActivity() {
             runOnUiThread {
                 Toast.makeText(this, "Camera initialization error: ${it.message}", Toast.LENGTH_LONG).show()
             }
-        }
-
-        scannerView.setOnClickListener {
-            codeScanner.startPreview()
         }
     }
 
