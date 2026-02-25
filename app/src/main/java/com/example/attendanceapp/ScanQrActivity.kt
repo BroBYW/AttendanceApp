@@ -143,12 +143,18 @@ class ScanQrActivity : AppCompatActivity() {
         if (::codeScanner.isInitialized && checkCameraPermission()) {
             codeScanner.startPreview()
         }
+        // Start scan-line animation
+        val scanLine = findViewById<android.view.View>(R.id.scanLine)
+        val anim = android.view.animation.AnimationUtils.loadAnimation(this, R.anim.scan_line)
+        scanLine.startAnimation(anim)
     }
 
     override fun onPause() {
         if (::codeScanner.isInitialized) {
             codeScanner.releaseResources()
         }
+        val scanLine = findViewById<android.view.View>(R.id.scanLine)
+        scanLine.clearAnimation()
         super.onPause()
     }
 

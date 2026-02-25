@@ -16,6 +16,15 @@
         app:frameVerticalBias="0.5"
         app:maskColor="@color/scanner_mask" />
 
+    <!-- Animated Scan Line -->
+    <View
+        android:id="@+id/scanLine"
+        android:layout_width="260dp"
+        android:layout_height="6dp"
+        android:layout_gravity="center"
+        android:background="@drawable/scan_line_gradient"
+        android:elevation="1dp" />
+
     <!-- Top Bar: Back + Title + Flash -->
     <LinearLayout
         android:id="@+id/topBar"

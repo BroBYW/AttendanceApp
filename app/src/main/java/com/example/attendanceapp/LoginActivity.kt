@@ -38,6 +38,9 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
+        // Fix status bar color after splash screen
+        window.statusBarColor = getColor(R.color.primary)
+
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 
         tilUsername = findViewById(R.id.tilUsername)

@@ -60,6 +60,7 @@ dependencies {
     implementation(libs.androidx.cardview)
     implementation(libs.androidx.splashscreen)
     implementation(libs.osmdroid)
+    implementation(libs.androidx.swiperefreshlayout)
 
     // Testing Dependencies
     testImplementation(libs.junit)
