@@ -11,12 +11,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import android.os.Build
+import com.example.attendanceapp.service.LocationTrackingService
 
 class SuccessActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_success)
+
+        startLocationTracking()
 
         // Animate the success icon with a bouncy pop-in
         val ivSuccessIcon = findViewById<ImageView>(R.id.ivSuccessIcon)
@@ -38,6 +42,16 @@ class SuccessActivity : AppCompatActivity() {
         val btnBackToHome = findViewById<MaterialButton>(R.id.btnBackToHome)
         btnBackToHome.setOnClickListener {
             navigateHome()
+        }
+    }
+
+    private fun startLocationTracking() {
+        val serviceIntent = Intent(this, LocationTrackingService::class.java)
+        serviceIntent.action = LocationTrackingService.ACTION_START
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
         }
     }
 

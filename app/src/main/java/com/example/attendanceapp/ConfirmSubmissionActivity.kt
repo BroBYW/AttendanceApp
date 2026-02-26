@@ -1,5 +1,9 @@
 package com.example.attendanceapp
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 import android.Manifest
 import android.content.Intent
 import android.location.Location
@@ -16,6 +20,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import android.view.animation.AnimationUtils
+import android.os.Build
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import org.osmdroid.config.Configuration
@@ -26,7 +34,9 @@ import org.osmdroid.views.overlay.Marker
 
 class ConfirmSubmissionActivity : AppCompatActivity() {
 
-    private var qrCode: String? = null
+    private var clockType: String? = null
+    private var lateReason: String? = null
+    private var attachmentUri: String? = null
     private var photoUri: String? = null
     private var currentLatitude: Double? = null
     private var currentLongitude: Double? = null
@@ -78,12 +88,18 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         locationHelper = LocationHelper(this)
 
         // Retrieve data from the previous activity
-        qrCode = intent.getStringExtra("qr_code")
+        clockType = intent.getStringExtra("clock_type")
+        lateReason = intent.getStringExtra("late_reason")
+        attachmentUri = intent.getStringExtra("attachment_uri")
         photoUri = intent.getStringExtra("photo_uri")
 
-        // Display QR code value
+        // Display check-in info
         val tvQrCodeValue = findViewById<TextView>(R.id.tvQrCodeValue)
-        tvQrCodeValue.text = qrCode ?: "No QR code scanned"
+        if (clockType == "late") {
+            tvQrCodeValue.text = "Type: Late Clock In\nReason: ${lateReason ?: "N/A"}\nAttachment: ${if (attachmentUri != null) "Yes" else "No"}"
+        } else {
+            tvQrCodeValue.text = "Type: Normal Clock In"
+        }
 
         // Display the captured photo
         val ivPhoto = findViewById<ImageView>(R.id.ivPhoto)
@@ -116,12 +132,14 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         if (locationHelper.hasLocationPermission()) {
             fetchLocation()
         } else {
-            requestLocationPermission.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
+            val perms = mutableListOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
             )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                perms.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            requestLocationPermission.launch(perms.toTypedArray())
         }
     }
 
@@ -171,10 +189,22 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         val popIn = AnimationUtils.loadAnimation(this, R.anim.pop_in)
         ivSuccessOverlay.startAnimation(popIn)
 
-        val locationText = if (currentLatitude != null && currentLongitude != null) {
-            String.format("%.4f, %.4f", currentLatitude, currentLongitude)
-        } else {
-            "Recorded"
+        var locationText = "Recorded"
+        if (currentLatitude != null && currentLongitude != null) {
+            locationText = String.format(java.util.Locale.US, "%.4f, %.4f", currentLatitude, currentLongitude)
+            
+            // Save initial location to Room Database immediately
+            lifecycleScope.launch(Dispatchers.IO) {
+                val db = com.example.attendanceapp.data.AppDatabase.getDatabase(applicationContext)
+                db.gpsLogDao().insertLog(
+                    com.example.attendanceapp.data.GpsLogEntity(
+                        latitude = currentLatitude!!,
+                        longitude = currentLongitude!!,
+                        timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
+                        accuracy = currentAccuracy ?: 0.0f
+                    )
+                )
+            }
         }
 
         // TODO: Implement actual submission logic (e.g., send data to a server)
@@ -250,12 +280,14 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
                 if (locationHelper.hasLocationPermission()) {
                     fetchLocation()
                 } else {
-                    requestLocationPermission.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        )
+                    val perms = mutableListOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
                     )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        perms.add(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    requestLocationPermission.launch(perms.toTypedArray())
                 }
             }
             .show()

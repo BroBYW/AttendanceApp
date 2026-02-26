@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -61,6 +62,12 @@ dependencies {
     implementation(libs.androidx.splashscreen)
     implementation(libs.osmdroid)
     implementation(libs.androidx.swiperefreshlayout)
+
+    // Room & WorkManager for Hourly GPS Logging
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     // Testing Dependencies
     testImplementation(libs.junit)
