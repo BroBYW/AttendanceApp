@@ -30,6 +30,10 @@ class MainActivity : AppCompatActivity() {
                     loadFragment(HistoryFragment())
                     true
                 }
+                R.id.nav_gps_logs -> {
+                    loadFragment(GpsLogFragment())
+                    true
+                }
                 R.id.nav_profile -> {
                     loadFragment(ProfileFragment())
                     true

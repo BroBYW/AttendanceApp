@@ -193,18 +193,7 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         if (currentLatitude != null && currentLongitude != null) {
             locationText = String.format(java.util.Locale.US, "%.4f, %.4f", currentLatitude, currentLongitude)
             
-            // Save initial location to Room Database immediately
-            lifecycleScope.launch(Dispatchers.IO) {
-                val db = com.example.attendanceapp.data.AppDatabase.getDatabase(applicationContext)
-                db.gpsLogDao().insertLog(
-                    com.example.attendanceapp.data.GpsLogEntity(
-                        latitude = currentLatitude!!,
-                        longitude = currentLongitude!!,
-                        timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
-                        accuracy = currentAccuracy ?: 0.0f
-                    )
-                )
-            }
+
         }
 
         // TODO: Implement actual submission logic (e.g., send data to a server)

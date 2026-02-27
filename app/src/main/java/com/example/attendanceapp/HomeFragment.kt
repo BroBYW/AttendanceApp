@@ -11,8 +11,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.attendanceapp.data.AppPreferences
 import com.example.attendanceapp.service.LocationTrackingService
@@ -31,8 +30,7 @@ class HomeFragment : Fragment() {
     private lateinit var tvClock: TextView
     private lateinit var tvDate: TextView
     private lateinit var swipeRefresh: SwipeRefreshLayout
-    private lateinit var rvHistory: RecyclerView
-    private lateinit var layoutEmptyState: LinearLayout
+
     private val handler = Handler(Looper.getMainLooper())
     private val malaysiaTimeZone = TimeZone.getTimeZone("Asia/Kuala_Lumpur")
 
@@ -55,8 +53,7 @@ class HomeFragment : Fragment() {
 
         tvClock = view.findViewById(R.id.tvClock)
         tvDate = view.findViewById(R.id.tvDate)
-        rvHistory = view.findViewById(R.id.rvAttendanceHistory)
-        layoutEmptyState = view.findViewById(R.id.layoutEmptyState)
+
 
         // Time-based greeting
         val tvGreeting = view.findViewById<TextView>(R.id.tvGreeting)
@@ -87,7 +84,6 @@ class HomeFragment : Fragment() {
             refreshData()
         }
 
-        setupAttendanceHistory()
         updateClock()
     }
 
@@ -181,7 +177,6 @@ class HomeFragment : Fragment() {
     private fun refreshData() {
         Handler(Looper.getMainLooper()).postDelayed({
             if (!isAdded) return@postDelayed
-            setupAttendanceHistory()
             swipeRefresh.isRefreshing = false
         }, 1500)
     }
@@ -200,28 +195,7 @@ class HomeFragment : Fragment() {
             .show()
     }
 
-    private fun setupAttendanceHistory() {
-        if (!isAdded) return
-        rvHistory.layoutManager = LinearLayoutManager(requireContext())
-        rvHistory.isNestedScrollingEnabled = false
 
-        val sampleRecords = listOf(
-            AttendanceRecord("24 Feb 2026", "06:45 AM", AttendanceRecord.Status.ON_TIME, "Lat: 3.1390, Lng: 101.6869"),
-            AttendanceRecord("23 Feb 2026", "06:52 AM", AttendanceRecord.Status.ON_TIME, "Lat: 3.1390, Lng: 101.6869"),
-            AttendanceRecord("22 Feb 2026", "07:15 AM", AttendanceRecord.Status.LATE, "Lat: 3.1391, Lng: 101.6870"),
-            AttendanceRecord("21 Feb 2026", "06:30 AM", AttendanceRecord.Status.ON_TIME, "Lat: 3.1389, Lng: 101.6868"),
-            AttendanceRecord("20 Feb 2026", "—", AttendanceRecord.Status.ABSENT, "No location recorded")
-        )
-
-        if (sampleRecords.isEmpty()) {
-            rvHistory.visibility = View.GONE
-            layoutEmptyState.visibility = View.VISIBLE
-        } else {
-            rvHistory.visibility = View.VISIBLE
-            layoutEmptyState.visibility = View.GONE
-            rvHistory.adapter = AttendanceHistoryAdapter(sampleRecords)
-        }
-    }
 
     private fun updateClock() {
         if (!isAdded) return
