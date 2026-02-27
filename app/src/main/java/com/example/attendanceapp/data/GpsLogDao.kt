@@ -12,6 +12,9 @@ interface GpsLogDao {
     @Query("SELECT * FROM gps_logs ORDER BY timestamp DESC")
     fun getAllLogs(): List<GpsLogEntity>
 
+    @Query("SELECT * FROM gps_logs WHERE timestamp >= :startDate ORDER BY timestamp DESC")
+    fun getLogsFromDate(startDate: String): List<GpsLogEntity>
+
     @Query("SELECT * FROM gps_logs WHERE synced = 0")
     fun getUnsyncedLogs(): List<GpsLogEntity>
 
