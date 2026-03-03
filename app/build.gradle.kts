@@ -47,6 +47,12 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
 
     // Custom App Dependencies (Location, Scanner, Image Loading, Activity/Fragment KTX)
     implementation(libs.play.services.location)
@@ -62,6 +68,10 @@ dependencies {
     implementation(libs.androidx.splashscreen)
     implementation(libs.osmdroid)
     implementation(libs.androidx.swiperefreshlayout)
+    // Networking & Serialization
+    implementation(libs.retrofit)
+    implementation(libs.converter.gson)
+    implementation(libs.logging.interceptor)
 
     // Room & WorkManager for Hourly GPS Logging
     implementation("androidx.room:room-runtime:2.6.1")

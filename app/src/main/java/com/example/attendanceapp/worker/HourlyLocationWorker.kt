@@ -43,9 +43,13 @@ class HourlyLocationWorker(
                 val location: Location? = Tasks.await(locationTask)
 
                 if (location != null) {
+                    val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
+                    if (userId == -1L) return@withContext Result.success() // Don't log if no user
+
                     val db = AppDatabase.getDatabase(applicationContext)
                     db.gpsLogDao().insertLog(
                         GpsLogEntity(
+                            userId = userId,
                             latitude = location.latitude,
                             longitude = location.longitude,
                             timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),

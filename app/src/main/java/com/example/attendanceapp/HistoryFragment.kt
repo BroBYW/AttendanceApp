@@ -5,9 +5,13 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.attendanceapp.data.network.RetrofitClient
+import kotlinx.coroutines.launch
 
 class HistoryFragment : Fragment() {
 
@@ -26,26 +30,45 @@ class HistoryFragment : Fragment() {
 
         rvFullHistory.layoutManager = LinearLayoutManager(requireContext())
 
-        val allRecords = listOf(
-            AttendanceRecord("24 Feb 2026", "06:45 AM", AttendanceRecord.Status.ON_TIME, "Lat: 3.1390, Lng: 101.6869"),
-            AttendanceRecord("23 Feb 2026", "06:52 AM", AttendanceRecord.Status.ON_TIME, "Lat: 3.1390, Lng: 101.6869"),
-            AttendanceRecord("22 Feb 2026", "07:15 AM", AttendanceRecord.Status.LATE, "Lat: 3.1391, Lng: 101.6870"),
-            AttendanceRecord("21 Feb 2026", "06:30 AM", AttendanceRecord.Status.ON_TIME, "Lat: 3.1389, Lng: 101.6868"),
-            AttendanceRecord("20 Feb 2026", "—", AttendanceRecord.Status.ABSENT, "No location recorded"),
-            AttendanceRecord("19 Feb 2026", "06:40 AM", AttendanceRecord.Status.ON_TIME, "Lat: 3.1390, Lng: 101.6869"),
-            AttendanceRecord("18 Feb 2026", "06:55 AM", AttendanceRecord.Status.ON_TIME, "Lat: 3.1390, Lng: 101.6869"),
-            AttendanceRecord("17 Feb 2026", "07:20 AM", AttendanceRecord.Status.LATE, "Lat: 3.1392, Lng: 101.6871"),
-            AttendanceRecord("16 Feb 2026", "—", AttendanceRecord.Status.ABSENT, "No location recorded"),
-            AttendanceRecord("15 Feb 2026", "06:35 AM", AttendanceRecord.Status.ON_TIME, "Lat: 3.1390, Lng: 101.6869")
-        )
+        rvFullHistory.layoutManager = LinearLayoutManager(requireContext())
 
-        if (allRecords.isEmpty()) {
-            rvFullHistory.visibility = View.GONE
-            layoutHistoryEmpty.visibility = View.VISIBLE
-        } else {
-            rvFullHistory.visibility = View.VISIBLE
-            layoutHistoryEmpty.visibility = View.GONE
-            rvFullHistory.adapter = AttendanceHistoryAdapter(allRecords)
+        fetchAttendanceHistory(rvFullHistory, layoutHistoryEmpty)
+    }
+
+    private fun fetchAttendanceHistory(rvFullHistory: RecyclerView, layoutHistoryEmpty: LinearLayout) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val apiService = RetrofitClient.getApiService(requireContext())
+                val response = apiService.getMyAttendance()
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    // Assuming Page response object has "content" array
+                    // You might need an intermediate DTO for Page<AttendanceResponse> if Gson fails mapping
+                    // For now, attempting to extract the data list:
+                    val jsonElement = com.google.gson.Gson().toJsonTree(response.body()?.data)
+                    
+                    if (jsonElement.isJsonObject && jsonElement.asJsonObject.has("content")) {
+                        val recordsArray = jsonElement.asJsonObject.get("content").asJsonArray
+                        val type = object : com.google.gson.reflect.TypeToken<List<com.example.attendanceapp.data.network.dto.AttendanceResponse>>() {}.type
+                        val records: List<com.example.attendanceapp.data.network.dto.AttendanceResponse> = com.google.gson.Gson().fromJson(recordsArray, type)
+
+                        if (records.isEmpty()) {
+                            rvFullHistory.visibility = View.GONE
+                            layoutHistoryEmpty.visibility = View.VISIBLE
+                        } else {
+                            rvFullHistory.visibility = View.VISIBLE
+                            layoutHistoryEmpty.visibility = View.GONE
+                            rvFullHistory.adapter = AttendanceHistoryAdapter(records)
+                        }
+                    } else {
+                        Toast.makeText(context, "Unexpected response format", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(context, "Failed to load history: ${response.message()}", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Network error: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }

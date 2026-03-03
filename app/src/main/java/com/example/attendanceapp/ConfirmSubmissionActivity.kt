@@ -32,6 +32,10 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
+
 class ConfirmSubmissionActivity : AppCompatActivity() {
 
     private var clockType: String? = null
@@ -181,10 +185,74 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
     }
 
     private fun submitAttendance() {
-        // Disable button to prevent double-submission
+        if (currentLatitude == null || currentLongitude == null) {
+            android.widget.Toast.makeText(this, "Location not ready", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+
         btnSubmit.isEnabled = false
 
-        // Show Lottie success animation
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val apiService = com.example.attendanceapp.data.network.RetrofitClient.getApiService(this@ConfirmSubmissionActivity)
+
+                val sessionManager = com.example.attendanceapp.utils.SessionManager(this@ConfirmSubmissionActivity)
+                val assignedOfficeId = sessionManager.getOfficeAreaId()
+
+                // Prepare JSON data part
+                val requestObj = com.example.attendanceapp.data.network.dto.ClockInRequest(
+                    clockInType = clockType?.uppercase() ?: "NORMAL",
+                    latitude = currentLatitude!!,
+                    longitude = currentLongitude!!,
+                    officeAreaId = assignedOfficeId,
+                    reason = lateReason,
+                    documentUrl = null,
+                    notes = null
+                )
+                val jsonString = com.google.gson.Gson().toJson(requestObj)
+                val mediaType = "application/json".toMediaTypeOrNull()
+                val dataPart = jsonString.toRequestBody(mediaType)
+
+                // Prepare Photo Part
+                var selfiePart: okhttp3.MultipartBody.Part? = null
+                if (photoUri != null) {
+                    val file = getFileFromUri(Uri.parse(photoUri!!))
+                    if (file != null) {
+                        val reqFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                        selfiePart = okhttp3.MultipartBody.Part.createFormData("selfie", file.name, reqFile)
+                    }
+                }
+
+                // Prepare Document Part
+                var docPart: okhttp3.MultipartBody.Part? = null
+                if (attachmentUri != null) {
+                    val file = getFileFromUri(Uri.parse(attachmentUri!!))
+                    if (file != null) {
+                        val reqFile = file.asRequestBody("*/*".toMediaTypeOrNull())
+                        docPart = okhttp3.MultipartBody.Part.createFormData("document", file.name, reqFile)
+                    }
+                }
+
+                val response = apiService.clockIn(dataPart, selfiePart, docPart)
+
+                launch(Dispatchers.Main) {
+                    if (response.isSuccessful && response.body()?.success == true) {
+                        showSuccessAndFinish()
+                    } else {
+                        android.widget.Toast.makeText(this@ConfirmSubmissionActivity, "Failed to submit: ${response.message()}", android.widget.Toast.LENGTH_LONG).show()
+                        btnSubmit.isEnabled = true
+                    }
+                }
+            } catch (e: Exception) {
+                launch(Dispatchers.Main) {
+                    android.widget.Toast.makeText(this@ConfirmSubmissionActivity, "Network error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    btnSubmit.isEnabled = true
+                }
+            }
+        }
+    }
+
+    private fun showSuccessAndFinish() {
         ivSuccessOverlay.visibility = View.VISIBLE
         val popIn = AnimationUtils.loadAnimation(this, R.anim.pop_in)
         ivSuccessOverlay.startAnimation(popIn)
@@ -192,13 +260,8 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         var locationText = "Recorded"
         if (currentLatitude != null && currentLongitude != null) {
             locationText = String.format(java.util.Locale.US, "%.4f, %.4f", currentLatitude, currentLongitude)
-            
-
         }
 
-        // TODO: Implement actual submission logic (e.g., send data to a server)
-
-        // Wait for animation briefly, then navigate to success page
         Handler(Looper.getMainLooper()).postDelayed({
             val intent = Intent(this, SuccessActivity::class.java).apply {
                 putExtra("location", locationText)
@@ -207,6 +270,22 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
             finish()
         }, 1500)
+    }
+
+    private fun getFileFromUri(uri: Uri): java.io.File? {
+        try {
+            val inputStream = contentResolver.openInputStream(uri) ?: return null
+            val tempFile = java.io.File.createTempFile("upload_", ".tmp", cacheDir)
+            tempFile.outputStream().use { output ->
+                inputStream.use { input ->
+                    input.copyTo(output)
+                }
+            }
+            return tempFile
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
     }
 
     private fun showLocationOnMap(latitude: Double, longitude: Double) {

@@ -15,6 +15,8 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class LoginActivity : AppCompatActivity() {
 
@@ -84,6 +86,7 @@ class LoginActivity : AppCompatActivity() {
 
     private fun performLogin() {
         val username = etUsername.text.toString().trim()
+        val password = etPassword.text.toString()
 
         // Save or clear Remember Me preference
         prefs.edit().apply {
@@ -104,15 +107,53 @@ class LoginActivity : AppCompatActivity() {
         etPassword.isEnabled = false
         cbRememberMe.isEnabled = false
 
-        // Simulate authentication delay
-        Handler(Looper.getMainLooper()).postDelayed({
-            val intent = Intent(this, MainActivity::class.java).apply {
-                putExtra("username", username)
+        lifecycleScope.launch {
+            try {
+                val apiService = com.example.attendanceapp.data.network.RetrofitClient.getApiService(this@LoginActivity)
+                val request = com.example.attendanceapp.data.network.dto.LoginRequest(username, password)
+                val response = apiService.login(request)
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val loginData = response.body()?.data
+                    loginData?.let {
+                        val sessionManager = com.example.attendanceapp.utils.SessionManager(this@LoginActivity)
+                        sessionManager.saveAuthToken(it.accessToken)
+                        sessionManager.saveRefreshToken(it.refreshToken)
+                        val officeId = it.user.assignedOfficeAreaIds?.firstOrNull()
+                        sessionManager.saveUserDetails(
+                            it.user.id,
+                            it.user.name,
+                            it.user.employeeId,
+                            it.user.role,
+                            officeId
+                        )
+                    }
+
+                    android.widget.Toast.makeText(this@LoginActivity, "Login Successful", android.widget.Toast.LENGTH_SHORT).show()
+                    
+                    val intent = Intent(this@LoginActivity, MainActivity::class.java).apply {
+                        putExtra("username", loginData?.user?.name ?: username)
+                    }
+                    startActivity(intent)
+                    overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+                    finish()
+                } else {
+                    showError("Login failed: ${response.message()}")
+                }
+            } catch (e: Exception) {
+                showError("Network error: ${e.message}")
             }
-            startActivity(intent)
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
-            finish()
-        }, 1500)
+        }
+    }
+
+    private fun showError(message: String) {
+        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
+        btnLogin.text = "Login"
+        btnLogin.isEnabled = true
+        progressLogin.visibility = View.GONE
+        etUsername.isEnabled = true
+        etPassword.isEnabled = true
+        cbRememberMe.isEnabled = true
     }
 
     private fun validateForm(): Boolean {

@@ -1,0 +1,30 @@
+package com.example.attendanceapp.data.network.dto
+
+data class AttendanceResponse(
+    val id: Long,
+    val userId: Long,
+    val userName: String,
+    val employeeId: String,
+    val officeAreaId: Long?,
+    val officeAreaName: String?,
+    val attendanceDate: String,
+    val clockInTime: String?,
+    val clockInLat: Double?,
+    val clockInLng: Double?,
+    val clockInType: String?,
+    val clockInPhotoUrl: String?,
+    val inGeofence: Boolean?,
+    val clockOutTime: String?,
+    val clockOutLat: Double?,
+    val clockOutLng: Double?,
+    val clockOutType: String?,
+    val clockOutPhotoUrl: String?,
+    val workingMinutes: Int?,
+    val status: String,
+    val reason: String?,
+    val documentUrl: String?,
+    val notes: String?,
+    val reviewedById: Long?,
+    val reviewedByName: String?,
+    val reviewedAt: String?
+)

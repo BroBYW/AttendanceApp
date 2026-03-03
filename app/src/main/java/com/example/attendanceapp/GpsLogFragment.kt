@@ -64,14 +64,16 @@ class GpsLogFragment : Fragment() {
     private fun loadGpsLogs(daysToFilter: Int?) {
         lifecycleScope.launch {
             val db = AppDatabase.getDatabase(requireContext())
+            val userId = com.example.attendanceapp.utils.SessionManager(requireContext()).getUserId()
+
             val logs = withContext(Dispatchers.IO) {
                 if (daysToFilter != null) {
                     val calendar = Calendar.getInstance()
                     calendar.add(Calendar.DAY_OF_YEAR, -daysToFilter)
                     val startDateStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(calendar.time)
-                    db.gpsLogDao().getLogsFromDate(startDateStr)
+                    db.gpsLogDao().getLogsFromDateForUser(userId, startDateStr)
                 } else {
-                    db.gpsLogDao().getAllLogs()
+                    db.gpsLogDao().getAllLogsForUser(userId)
                 }
             }
 

@@ -7,8 +7,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class ProfileFragment : Fragment() {
 
@@ -50,10 +54,21 @@ class ProfileFragment : Fragment() {
                 .setMessage("Are you sure you want to logout?")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Logout") { _, _ ->
-                    val intent = Intent(requireContext(), LoginActivity::class.java)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                    startActivity(intent)
-                    activity?.finish()
+                    // Clear session data
+                    com.example.attendanceapp.utils.SessionManager(requireContext()).clearSession()
+
+                    // Clear database logs
+                    lifecycleScope.launch {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            com.example.attendanceapp.data.AppDatabase.getDatabase(requireContext()).gpsLogDao().deleteAllLogs()
+                        }
+                        
+                        // Navigate back to login
+                        val intent = Intent(requireContext(), LoginActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        startActivity(intent)
+                        activity?.finish()
+                    }
                 }
                 .show()
         }

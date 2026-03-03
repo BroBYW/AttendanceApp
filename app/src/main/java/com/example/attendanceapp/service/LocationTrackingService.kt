@@ -22,6 +22,8 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.Tasks
 import kotlinx.coroutines.*
+import com.example.attendanceapp.data.network.RetrofitClient
+import com.example.attendanceapp.data.network.dto.GpsLogDto
 
 class LocationTrackingService : Service() {
 
@@ -40,7 +42,7 @@ class LocationTrackingService : Service() {
         
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "LocationTrackerChannel"
-        const val INTERVAL_MILLIS = 60 * 60 * 1000L // 1 hour
+        const val INTERVAL_MILLIS = 30 * 60 * 1000L // 30 minutes
     }
 
     override fun onCreate() {
@@ -127,30 +129,43 @@ class LocationTrackingService : Service() {
                 val location: Location? = Tasks.await(locationTask)
 
                 if (location != null) {
+                    val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
+                    if (userId == -1L) return@launch // Don't log if no user
+
                     // Update Database
                     val db = AppDatabase.getDatabase(applicationContext)
                     db.gpsLogDao().insertLog(
                         GpsLogEntity(
+                            userId = userId,
                             latitude = location.latitude,
                             longitude = location.longitude,
                             timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
-                            accuracy = location.accuracy
+                            accuracy = location.accuracy,
+                            synced = false
                         )
                     )
                     
+                    // Attempt to sync logs with the server
+                    syncLogsWithServer(db, userId)
+
                     // Update Notification
                     val msg = "Lat: ${location.latitude}, Lng: ${location.longitude}"
                     val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     notificationManager.notify(NOTIFICATION_ID, createNotification(msg))
                 } else {
+                    val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
+                    if (userId == -1L) return@launch // Don't log if no user
+
                     // Fallback to force database creation if emulator has no GPS fix yet
                     val db = AppDatabase.getDatabase(applicationContext)
                     db.gpsLogDao().insertLog(
                         GpsLogEntity(
+                            userId = userId,
                             latitude = 0.0,
                             longitude = 0.0,
                             timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
-                            accuracy = 0.0f
+                            accuracy = 0.0f,
+                            synced = false
                         )
                     )
                     
@@ -160,6 +175,38 @@ class LocationTrackingService : Service() {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    private suspend fun syncLogsWithServer(db: AppDatabase, userId: Long) {
+        try {
+            // 1. Fetch all unsynced logs directly from the local database
+            val unsyncedLogs = db.gpsLogDao().getUnsyncedLogsForUser(userId)
+            
+            if (unsyncedLogs.isEmpty()) return
+
+            // 2. Map Entity to DTO
+            val logDtos = unsyncedLogs.map { entity ->
+                GpsLogDto(
+                    latitude = entity.latitude,
+                    longitude = entity.longitude,
+                    timestamp = entity.timestamp.replace(" ", "T"),
+                    accuracy = entity.accuracy?.toDouble(),
+                    synced = true // Signal that we are syncing these
+                )
+            }
+
+            // 3. Make Retrofit Network Call
+            val apiService = RetrofitClient.getApiService(applicationContext)
+            val response = apiService.submitGpsLogs(logDtos)
+
+            // 4. Update the syncing status using the optimized DAO method
+            if (response.isSuccessful && response.body()?.success == true) {
+                val syncedIds = unsyncedLogs.map { it.id }
+                db.gpsLogDao().markAsSynced(syncedIds)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace() // Silent fail on background sync error
         }
     }
 

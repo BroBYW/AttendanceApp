@@ -8,8 +8,13 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 
+import com.example.attendanceapp.data.network.dto.AttendanceResponse
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+
 class AttendanceHistoryAdapter(
-    private val records: List<AttendanceRecord>
+    private val records: List<AttendanceResponse>
 ) : RecyclerView.Adapter<AttendanceHistoryAdapter.ViewHolder>() {
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -30,25 +35,55 @@ class AttendanceHistoryAdapter(
         val record = records[position]
         val context = holder.itemView.context
 
-        holder.tvDate.text = record.date
-        holder.tvTime.text = record.time
-        holder.tvLocation.text = record.location
+        val apiDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val displayDateFormat = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
+        
+        try {
+            val parsedDate = apiDateFormat.parse(record.attendanceDate)
+            holder.tvDate.text = parsedDate?.let { displayDateFormat.format(it) } ?: record.attendanceDate
+        } catch (e: Exception) {
+            holder.tvDate.text = record.attendanceDate
+        }
+
+        if (record.clockInTime != null) {
+            val apiTimeFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ENGLISH)
+            val displayTimeFormat = SimpleDateFormat("hh:mm a", Locale.ENGLISH)
+            try {
+                val parsedTime = apiTimeFormat.parse(record.clockInTime)
+                holder.tvTime.text = parsedTime?.let { displayTimeFormat.format(it) } ?: record.clockInTime
+            } catch (e: Exception) {
+                holder.tvTime.text = record.clockInTime
+            }
+        } else {
+            holder.tvTime.text = "—"
+        }
+
+        if (record.clockInLat != null && record.clockInLng != null) {
+            holder.tvLocation.text = String.format("Lat: %.4f, Lng: %.4f", record.clockInLat, record.clockInLng)
+        } else {
+            holder.tvLocation.text = "No location recorded"
+        }
 
         when (record.status) {
-            AttendanceRecord.Status.ON_TIME -> {
+            "ON_TIME" -> {
                 holder.tvStatus.text = "On Time"
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.success))
                 holder.ivStatusIcon.setImageResource(R.drawable.ic_check_circle)
             }
-            AttendanceRecord.Status.LATE -> {
+            "LATE" -> {
                 holder.tvStatus.text = "Late"
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.warning))
                 holder.ivStatusIcon.setImageResource(R.drawable.ic_warning)
             }
-            AttendanceRecord.Status.ABSENT -> {
+            "ABSENT" -> {
                 holder.tvStatus.text = "Absent"
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.error))
                 holder.ivStatusIcon.setImageResource(R.drawable.ic_cancel)
+            }
+            else -> {
+                holder.tvStatus.text = record.status
+                holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.on_surface))
+                holder.ivStatusIcon.setImageResource(R.drawable.ic_check_circle)
             }
         }
     }

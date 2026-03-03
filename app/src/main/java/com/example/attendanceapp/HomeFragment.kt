@@ -11,8 +11,10 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-
+import androidx.lifecycle.lifecycleScope
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.example.attendanceapp.data.network.RetrofitClient
+import kotlinx.coroutines.launch
 import com.example.attendanceapp.data.AppPreferences
 import com.example.attendanceapp.service.LocationTrackingService
 import com.example.attendanceapp.R
@@ -24,6 +26,9 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class HomeFragment : Fragment() {
 
@@ -119,20 +124,67 @@ class HomeFragment : Fragment() {
             .setTitle("Clock Out")
             .setMessage("Are you sure you want to clock out? Location tracking will stop.")
             .setPositiveButton("Clock Out") { _, _ ->
-                // Stop the location tracking service
-                val serviceIntent = Intent(requireContext(), LocationTrackingService::class.java)
-                serviceIntent.action = LocationTrackingService.ACTION_STOP
-                requireContext().startService(serviceIntent)
-                
-                // Immediately update local preference to avoid UI lag
-                AppPreferences.setTrackingActive(requireContext(), false)
-
-                Toast.makeText(requireContext(), "Clocked Out Successfully", Toast.LENGTH_SHORT).show()
-                // Update UI state
-                checkTrackingState()
+                performClockOut()
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun performClockOut() {
+        val locationHelper = LocationHelper(requireContext())
+        if (!locationHelper.hasLocationPermission()) {
+            Toast.makeText(context, "Location permission required to clock out", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        swipeRefresh.isRefreshing = true
+
+        locationHelper.getCurrentLocation(object : LocationHelper.OnLocationResultListener {
+            override fun onLocationReceived(location: android.location.Location) {
+                submitClockOutData(location.latitude, location.longitude)
+            }
+
+            override fun onLocationError(message: String) {
+                swipeRefresh.isRefreshing = false
+                Toast.makeText(context, "Failed to get location: $message", Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    private fun submitClockOutData(lat: Double, lng: Double) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val apiService = RetrofitClient.getApiService(requireContext())
+                val requestObj = com.example.attendanceapp.data.network.dto.ClockOutRequest(
+                    latitude = lat,
+                    longitude = lng
+                )
+                val jsonString = com.google.gson.Gson().toJson(requestObj)
+                val mediaType = "application/json".toMediaTypeOrNull()
+                val dataPart = jsonString.toRequestBody(mediaType)
+                
+                val response = apiService.clockOut(dataPart, null)
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    // Stop the location tracking service
+                    val serviceIntent = Intent(requireContext(), LocationTrackingService::class.java)
+                    serviceIntent.action = LocationTrackingService.ACTION_STOP
+                    requireContext().startService(serviceIntent)
+                    
+                    AppPreferences.setTrackingActive(requireContext(), false)
+
+                    Toast.makeText(requireContext(), "Clocked Out Successfully", Toast.LENGTH_SHORT).show()
+                    checkTrackingState()
+                    refreshData() // Refresh records to show new Clock Out state
+                } else {
+                    Toast.makeText(requireContext(), "Clock out failed", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(requireContext(), "Network error: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                swipeRefresh.isRefreshing = false
+            }
+        }
     }
 
     private fun checkTrackingState() {
@@ -175,10 +227,23 @@ class HomeFragment : Fragment() {
     }
 
     private fun refreshData() {
-        Handler(Looper.getMainLooper()).postDelayed({
-            if (!isAdded) return@postDelayed
-            swipeRefresh.isRefreshing = false
-        }, 1500)
+        swipeRefresh.isRefreshing = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val apiService = RetrofitClient.getApiService(requireContext())
+                val response = apiService.getMyAttendance()
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    Toast.makeText(context, "Data refreshed", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Refresh failed", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Network error", Toast.LENGTH_SHORT).show()
+            } finally {
+                swipeRefresh.isRefreshing = false
+            }
+        }
     }
 
     private fun showLogoutDialog() {
