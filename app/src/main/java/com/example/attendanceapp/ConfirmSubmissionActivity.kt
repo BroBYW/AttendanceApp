@@ -40,7 +40,7 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
 
     private var clockType: String? = null
     private var lateReason: String? = null
-    private var attachmentUri: String? = null
+    private var attachmentPath: String? = null
     private var photoUri: String? = null
     private var currentLatitude: Double? = null
     private var currentLongitude: Double? = null
@@ -94,13 +94,13 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         // Retrieve data from the previous activity
         clockType = intent.getStringExtra("clock_type")
         lateReason = intent.getStringExtra("late_reason")
-        attachmentUri = intent.getStringExtra("attachment_uri")
+        attachmentPath = intent.getStringExtra("attachment_path")
         photoUri = intent.getStringExtra("photo_uri")
 
         // Display check-in info
         val tvQrCodeValue = findViewById<TextView>(R.id.tvQrCodeValue)
         if (clockType == "late") {
-            tvQrCodeValue.text = "Type: Late Clock In\nReason: ${lateReason ?: "N/A"}\nAttachment: ${if (attachmentUri != null) "Yes" else "No"}"
+            tvQrCodeValue.text = "Type: Late Clock In\nReason: ${lateReason ?: "N/A"}\nAttachment: ${if (attachmentPath != null) "Yes" else "No"}"
         } else {
             tvQrCodeValue.text = "Type: Normal Clock In"
         }
@@ -197,7 +197,37 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
                 val apiService = com.example.attendanceapp.data.network.RetrofitClient.getApiService(this@ConfirmSubmissionActivity)
 
                 val sessionManager = com.example.attendanceapp.utils.SessionManager(this@ConfirmSubmissionActivity)
-                val assignedOfficeId = sessionManager.getOfficeAreaId()
+
+                // Refresh user profile to get latest assigned office area IDs
+                var assignedOfficeId = sessionManager.getOfficeAreaId()
+                var allAssignedIds = sessionManager.getOfficeAreaIds()
+                try {
+                    val profileResponse = apiService.getMyProfile()
+                    if (profileResponse.isSuccessful && profileResponse.body()?.success == true) {
+                        val freshIds = profileResponse.body()?.data?.assignedOfficeAreaIds
+                        sessionManager.saveOfficeAreaIds(freshIds)
+                        allAssignedIds = freshIds ?: emptyList()
+                        assignedOfficeId = freshIds?.firstOrNull()
+                    }
+                } catch (e: Exception) {
+                    // If refresh fails, continue with cached value
+                    e.printStackTrace()
+                }
+                
+                // If there are multiple areas, find the one the user is actually inside
+                if (allAssignedIds.size > 1 && currentLatitude != null && currentLongitude != null) {
+                    for (id in allAssignedIds) {
+                        try {
+                            val checkRes = apiService.checkLocation(currentLatitude!!, currentLongitude!!, id)
+                            if (checkRes.isSuccessful && checkRes.body()?.data?.get("insideGeofence") == true) {
+                                assignedOfficeId = id
+                                break
+                            }
+                        } catch (e: Exception) {
+                           // Ignore and try next
+                        }
+                    }
+                }
 
                 // Prepare JSON data part
                 val requestObj = com.example.attendanceapp.data.network.dto.ClockInRequest(
@@ -225,9 +255,9 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
 
                 // Prepare Document Part
                 var docPart: okhttp3.MultipartBody.Part? = null
-                if (attachmentUri != null) {
-                    val file = getFileFromUri(Uri.parse(attachmentUri!!))
-                    if (file != null) {
+                if (attachmentPath != null) {
+                    val file = java.io.File(attachmentPath!!)
+                    if (file.exists()) {
                         val reqFile = file.asRequestBody("*/*".toMediaTypeOrNull())
                         docPart = okhttp3.MultipartBody.Part.createFormData("document", file.name, reqFile)
                     }

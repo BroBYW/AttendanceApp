@@ -71,6 +71,7 @@ dependencies {
     // Networking & Serialization
     implementation(libs.retrofit)
     implementation(libs.converter.gson)
+    implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
     implementation(libs.logging.interceptor)
 
     // Room & WorkManager for Hourly GPS Logging

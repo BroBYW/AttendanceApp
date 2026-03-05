@@ -23,4 +23,7 @@ interface GpsLogDao {
 
     @Query("DELETE FROM gps_logs")
     fun deleteAllLogs()
+
+    @Query("DELETE FROM gps_logs WHERE synced = 1 AND timestamp < datetime('now', 'localtime', '-30 days')")
+    fun deleteOldSyncedLogs()
 }

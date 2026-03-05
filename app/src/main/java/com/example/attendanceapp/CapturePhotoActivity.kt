@@ -23,7 +23,7 @@ class CapturePhotoActivity : AppCompatActivity() {
     private lateinit var photoUri: Uri
     private var clockType: String? = null
     private var lateReason: String? = null
-    private var attachmentUri: String? = null
+    private var attachmentPath: String? = null
 
     // Register the permission request
     private val requestCameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -41,7 +41,7 @@ class CapturePhotoActivity : AppCompatActivity() {
             val intent = Intent(this, ConfirmSubmissionActivity::class.java)
             intent.putExtra("clock_type", clockType)
             intent.putExtra("late_reason", lateReason)
-            intent.putExtra("attachment_uri", attachmentUri)
+            intent.putExtra("attachment_path", attachmentPath)
             intent.putExtra("photo_uri", photoUri.toString())
             startActivity(intent)
             finish()
@@ -57,7 +57,7 @@ class CapturePhotoActivity : AppCompatActivity() {
         // Get data passed from previous activities
         clockType = intent.getStringExtra("clock_type")
         lateReason = intent.getStringExtra("late_reason")
-        attachmentUri = intent.getStringExtra("attachment_uri")
+        attachmentPath = intent.getStringExtra("attachment_path")
 
         val btnTakePhoto = findViewById<Button>(R.id.btnTakePhoto)
         btnTakePhoto.setOnClickListener {

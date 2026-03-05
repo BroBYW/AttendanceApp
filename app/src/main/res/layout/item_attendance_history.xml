@@ -51,6 +51,16 @@
                 android:layout_marginTop="2dp"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="12sp" />
+
+            <!-- Rejection note (hidden by default, shown inline for rejected records) -->
+            <TextView
+                android:id="@+id/tvRejectionNote"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/error"
+                android:textSize="11sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Time & Status -->

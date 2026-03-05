@@ -39,7 +39,8 @@ class HourlyLocationWorker(
                 val fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
                 
                 // Fetch high accuracy location synchronously using Tasks.await
-                val locationTask = fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                val cancellationTokenSource = com.google.android.gms.tasks.CancellationTokenSource()
+                val locationTask = fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationTokenSource.token)
                 val location: Location? = Tasks.await(locationTask)
 
                 if (location != null) {

@@ -14,7 +14,7 @@ class SessionManager(context: Context) {
         const val KEY_USER_NAME = "user_name"
         const val KEY_EMPLOYEE_ID = "employee_id"
         const val KEY_ROLE = "role"
-        const val KEY_OFFICE_AREA_ID = "office_area_id"
+        const val KEY_OFFICE_AREA_IDS = "office_area_ids"
     }
 
     fun saveAuthToken(token: String) {
@@ -37,16 +37,27 @@ class SessionManager(context: Context) {
         return prefs.getString(KEY_REFRESH_TOKEN, null)
     }
 
-    fun saveUserDetails(id: Long, name: String, employeeId: String, role: String, officeAreaId: Long?) {
+    fun saveUserDetails(id: Long, name: String, employeeId: String, role: String, officeAreaIds: List<Long>?) {
         val editor = prefs.edit()
         editor.putLong(KEY_USER_ID, id)
         editor.putString(KEY_USER_NAME, name)
         editor.putString(KEY_EMPLOYEE_ID, employeeId)
         editor.putString(KEY_ROLE, role)
-        if (officeAreaId != null) {
-            editor.putLong(KEY_OFFICE_AREA_ID, officeAreaId)
+        if (!officeAreaIds.isNullOrEmpty()) {
+            editor.putString(KEY_OFFICE_AREA_IDS, officeAreaIds.joinToString(","))
         } else {
-            editor.remove(KEY_OFFICE_AREA_ID)
+            editor.remove(KEY_OFFICE_AREA_IDS)
+        }
+        editor.apply()
+    }
+
+    /** Update only the assigned office area IDs (used for refresh) */
+    fun saveOfficeAreaIds(officeAreaIds: List<Long>?) {
+        val editor = prefs.edit()
+        if (!officeAreaIds.isNullOrEmpty()) {
+            editor.putString(KEY_OFFICE_AREA_IDS, officeAreaIds.joinToString(","))
+        } else {
+            editor.remove(KEY_OFFICE_AREA_IDS)
         }
         editor.apply()
     }
@@ -59,9 +70,15 @@ class SessionManager(context: Context) {
         return prefs.getString(KEY_USER_NAME, null)
     }
 
+    /** Get all assigned office area IDs */
+    fun getOfficeAreaIds(): List<Long> {
+        val csv = prefs.getString(KEY_OFFICE_AREA_IDS, null) ?: return emptyList()
+        return csv.split(",").mapNotNull { it.trim().toLongOrNull() }
+    }
+
+    /** Get the first assigned office area ID (backward compatible) */
     fun getOfficeAreaId(): Long? {
-        val id = prefs.getLong(KEY_OFFICE_AREA_ID, -1)
-        return if (id != -1L) id else null
+        return getOfficeAreaIds().firstOrNull()
     }
 
     fun clearSession() {

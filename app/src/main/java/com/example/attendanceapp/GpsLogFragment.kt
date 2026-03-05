@@ -25,6 +25,7 @@ class GpsLogFragment : Fragment() {
     private lateinit var layoutEmptyState: LinearLayout
     private lateinit var chipGroupFilter: ChipGroup
     private lateinit var adapter: GpsLogAdapter
+    private lateinit var swipeRefresh: androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -36,6 +37,7 @@ class GpsLogFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        swipeRefresh = view.findViewById(R.id.swipeRefreshGpsLog)
         rvGpsLogs = view.findViewById(R.id.rvGpsLogs)
         layoutEmptyState = view.findViewById(R.id.layoutEmptyState)
         chipGroupFilter = view.findViewById(R.id.chipGroupFilter)
@@ -43,6 +45,21 @@ class GpsLogFragment : Fragment() {
         rvGpsLogs.layoutManager = LinearLayoutManager(requireContext())
         adapter = GpsLogAdapter(emptyList())
         rvGpsLogs.adapter = adapter
+
+        swipeRefresh.setColorSchemeResources(R.color.secondary)
+        swipeRefresh.setOnRefreshListener {
+            val checkedIds = chipGroupFilter.checkedChipIds
+            val daysFilter = if (checkedIds.isEmpty()) 3 else {
+                when (checkedIds.first()) {
+                    R.id.chip3Days -> 3
+                    R.id.chip7Days -> 7
+                    R.id.chip30Days -> 30
+                    R.id.chipAll -> null
+                    else -> 3
+                }
+            }
+            loadGpsLogs(daysFilter)
+        }
 
         setupFilter()
         loadGpsLogs(3) // Default to last 3 days
@@ -62,6 +79,8 @@ class GpsLogFragment : Fragment() {
     }
 
     private fun loadGpsLogs(daysToFilter: Int?) {
+        if (view == null) return
+        swipeRefresh.isRefreshing = true
         lifecycleScope.launch {
             val db = AppDatabase.getDatabase(requireContext())
             val userId = com.example.attendanceapp.utils.SessionManager(requireContext()).getUserId()
@@ -85,6 +104,7 @@ class GpsLogFragment : Fragment() {
                 layoutEmptyState.visibility = View.GONE
                 adapter.updateData(logs)
             }
+            swipeRefresh.isRefreshing = false
         }
     }
 }

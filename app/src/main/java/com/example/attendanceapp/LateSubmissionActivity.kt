@@ -13,7 +13,7 @@ import com.google.android.material.textfield.TextInputEditText
 
 class LateSubmissionActivity : AppCompatActivity() {
 
-    private var attachedFileUri: Uri? = null
+    private var attachedFilePath: String? = null
 
     private lateinit var etReason: TextInputEditText
     private lateinit var tvFileName: TextView
@@ -26,9 +26,53 @@ class LateSubmissionActivity : AppCompatActivity() {
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            attachedFileUri = it
-            // Show just the filename segment or 'File attached'
-            tvFileName.text = "File attached successfully"
+            val fileName = getOriginalFileName(it)
+            val cachedFile = copyFileToCache(it, fileName)
+            if (cachedFile != null) {
+                attachedFilePath = cachedFile.absolutePath
+                tvFileName.text = fileName ?: "File attached"
+            } else {
+                Toast.makeText(this, "Failed to load attached file", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun getOriginalFileName(uri: Uri): String? {
+        var result: String? = null
+        if (uri.scheme == "content") {
+            try {
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (index != -1) {
+                            result = cursor.getString(index)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        if (result == null) {
+            result = uri.path?.let { java.io.File(it).name }
+        }
+        return result
+    }
+
+    private fun copyFileToCache(uri: Uri, fileName: String?): java.io.File? {
+        return try {
+            val inputStream = contentResolver.openInputStream(uri) ?: return null
+            val safeName = fileName?.replace(Regex("[^a-zA-Z0-9.-]"), "_") ?: "attachment_${System.currentTimeMillis()}.tmp"
+            val tempFile = java.io.File(cacheDir, safeName)
+            tempFile.outputStream().use { output ->
+                inputStream.use { input ->
+                    input.copyTo(output)
+                }
+            }
+            tempFile
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 
@@ -62,8 +106,8 @@ class LateSubmissionActivity : AppCompatActivity() {
             val intent = Intent(this, CapturePhotoActivity::class.java).apply {
                 putExtra("clock_type", "late")
                 putExtra("late_reason", reason)
-                attachedFileUri?.let { uri ->
-                    putExtra("attachment_uri", uri.toString())
+                attachedFilePath?.let { path ->
+                    putExtra("attachment_path", path)
                 }
             }
             startActivity(intent)

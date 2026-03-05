@@ -29,6 +29,19 @@ interface ApiService {
     @POST("/api/gps-logs/batch")
     suspend fun submitGpsLogs(@Body logs: List<GpsLogDto>): Response<ApiResponse<String>>
 
+    @GET("/api/admin/users/me")
+    suspend fun getMyProfile(): Response<ApiResponse<UserResponse>>
+
     @GET("/api/attendance/my")
     suspend fun getMyAttendance(): Response<ApiResponse<Any>>
+
+    @GET("/api/admin/office-areas/{id}/geojson")
+    suspend fun getGeoJson(@Path("id") id: Long): Response<String>
+
+    @POST("/api/admin/office-areas/check-location")
+    suspend fun checkLocation(
+        @Query("latitude") latitude: Double,
+        @Query("longitude") longitude: Double,
+        @Query("officeAreaId") officeAreaId: Long
+    ): Response<ApiResponse<Map<String, Any>>>
 }

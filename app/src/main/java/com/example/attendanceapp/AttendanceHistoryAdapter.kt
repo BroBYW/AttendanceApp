@@ -23,6 +23,7 @@ class AttendanceHistoryAdapter(
         val tvLocation: TextView = view.findViewById(R.id.tvHistoryLocation)
         val tvTime: TextView = view.findViewById(R.id.tvHistoryTime)
         val tvStatus: TextView = view.findViewById(R.id.tvHistoryStatus)
+        val tvRejectionNote: TextView = view.findViewById(R.id.tvRejectionNote)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -64,19 +65,25 @@ class AttendanceHistoryAdapter(
             holder.tvLocation.text = "No location recorded"
         }
 
+        // Status display matching backend AttendanceStatus enum values
         when (record.status) {
-            "ON_TIME" -> {
-                holder.tvStatus.text = "On Time"
+            "AUTO_APPROVED" -> {
+                holder.tvStatus.text = "Approved"
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.success))
                 holder.ivStatusIcon.setImageResource(R.drawable.ic_check_circle)
             }
-            "LATE" -> {
-                holder.tvStatus.text = "Late"
+            "APPROVED" -> {
+                holder.tvStatus.text = "Approved"
+                holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.success))
+                holder.ivStatusIcon.setImageResource(R.drawable.ic_check_circle)
+            }
+            "PENDING" -> {
+                holder.tvStatus.text = "Pending"
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.warning))
                 holder.ivStatusIcon.setImageResource(R.drawable.ic_warning)
             }
-            "ABSENT" -> {
-                holder.tvStatus.text = "Absent"
+            "REJECTED" -> {
+                holder.tvStatus.text = "Rejected"
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.error))
                 holder.ivStatusIcon.setImageResource(R.drawable.ic_cancel)
             }
@@ -85,6 +92,21 @@ class AttendanceHistoryAdapter(
                 holder.tvStatus.setTextColor(ContextCompat.getColor(context, R.color.on_surface))
                 holder.ivStatusIcon.setImageResource(R.drawable.ic_check_circle)
             }
+        }
+
+        // Show note only for REJECTED records
+        if (record.status == "REJECTED" && !record.notes.isNullOrBlank()) {
+            holder.tvRejectionNote.visibility = View.VISIBLE
+            holder.tvRejectionNote.text = buildString {
+                append("Rejection Note: ")
+                append(record.notes)
+                if (!record.reviewedByName.isNullOrBlank()) {
+                    append(" — ")
+                    append(record.reviewedByName)
+                }
+            }
+        } else {
+            holder.tvRejectionNote.visibility = View.GONE
         }
     }
 

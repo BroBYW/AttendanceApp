@@ -6,14 +6,21 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
+import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.work.*
 import com.example.attendanceapp.R
 import com.example.attendanceapp.data.AppDatabase
 import com.example.attendanceapp.data.AppPreferences
@@ -22,6 +29,7 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.Tasks
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.withLock
 import com.example.attendanceapp.data.network.RetrofitClient
 import com.example.attendanceapp.data.network.dto.GpsLogDto
 
@@ -29,10 +37,26 @@ class LocationTrackingService : Service() {
 
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.IO + job)
+    private val syncMutex = kotlinx.coroutines.sync.Mutex()
     
     // AlarmManager components for exactly hourly wakes
     private lateinit var alarmManager: AlarmManager
     private lateinit var alarmIntent: PendingIntent
+    
+    // Network connectivity callback for instant sync on reconnect
+    private lateinit var connectivityManager: ConnectivityManager
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            Log.d("LocationTrackingService", "Network available — triggering GPS sync")
+            scope.launch {
+                val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
+                if (userId != -1L) {
+                    val db = AppDatabase.getDatabase(applicationContext)
+                    syncLogsWithServer(db, userId)
+                }
+            }
+        }
+    }
 
     companion object {
         const val ACTION_START = "ACTION_START"
@@ -48,6 +72,7 @@ class LocationTrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         
         val intent = Intent(this, LocationTrackingService::class.java).apply {
             action = ACTION_ALARM_WAKE
@@ -88,13 +113,21 @@ class LocationTrackingService : Service() {
         // Take immediate log
         logLocationAndUpdateNotification()
         
-        // Schedule periodic
+        // Schedule periodic alarm for GPS capture
         scheduleNextAlarm()
+        
+        // Schedule periodic WorkManager sync with network constraint (backup)
+        schedulePeriodicSync()
+        
+        // Register network callback for instant sync on reconnect
+        registerNetworkCallback()
     }
 
     private fun stopTracking() {
         AppPreferences.setTrackingActive(applicationContext, false)
         alarmManager.cancel(alarmIntent)
+        WorkManager.getInstance(applicationContext).cancelUniqueWork(GpsSyncWorker.WORK_NAME_PERIODIC)
+        unregisterNetworkCallback()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -125,7 +158,8 @@ class LocationTrackingService : Service() {
 
             try {
                 val fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
-                val locationTask = fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                val cancellationTokenSource = com.google.android.gms.tasks.CancellationTokenSource()
+                val locationTask = fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationTokenSource.token)
                 val location: Location? = Tasks.await(locationTask)
 
                 if (location != null) {
@@ -145,7 +179,8 @@ class LocationTrackingService : Service() {
                         )
                     )
                     
-                    // Attempt to sync logs with the server
+                    // Attempt to sync logs with the server immediately
+                    // If this fails (no network), the WorkManager will retry when online
                     syncLogsWithServer(db, userId)
 
                     // Update Notification
@@ -179,34 +214,108 @@ class LocationTrackingService : Service() {
     }
 
     private suspend fun syncLogsWithServer(db: AppDatabase, userId: Long) {
+        syncMutex.withLock {
+            try {
+                // 1. Fetch all unsynced logs directly from the local database
+                val unsyncedLogs = db.gpsLogDao().getUnsyncedLogsForUser(userId)
+                
+                if (unsyncedLogs.isEmpty()) return
+
+                // 2. Map Entity to DTO
+                val logDtos = unsyncedLogs.map { entity ->
+                    GpsLogDto(
+                        latitude = entity.latitude,
+                        longitude = entity.longitude,
+                        timestamp = entity.timestamp.replace(" ", "T"),
+                        accuracy = entity.accuracy?.toDouble(),
+                        synced = true // Signal that we are syncing these
+                    )
+                }
+
+                // 3. Make Retrofit Network Call
+                val apiService = RetrofitClient.getApiService(applicationContext)
+                val response = apiService.submitGpsLogs(logDtos)
+
+                // 4. Update the syncing status using the optimized DAO method
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val syncedIds = unsyncedLogs.map { it.id }
+                    db.gpsLogDao().markAsSynced(syncedIds)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Network failed — enqueue a one-shot sync that fires when back online
+                enqueueOneshotSync()
+            }
+        }
+    }
+
+    /**
+     * Schedules a periodic sync worker that runs every hour when network is available.
+     * This catches any logs that accumulated during offline periods.
+     */
+    private fun schedulePeriodicSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val syncRequest = PeriodicWorkRequestBuilder<GpsSyncWorker>(
+            1, TimeUnit.HOURS
+        )
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+
+        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+            GpsSyncWorker.WORK_NAME_PERIODIC,
+            ExistingPeriodicWorkPolicy.KEEP,
+            syncRequest
+        )
+    }
+
+    /**
+     * Enqueues a one-shot sync that fires as soon as network connectivity returns.
+     */
+    private fun enqueueOneshotSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
+        val syncRequest = OneTimeWorkRequestBuilder<GpsSyncWorker>()
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+
+        WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+            GpsSyncWorker.WORK_NAME_ONESHOT,
+            ExistingWorkPolicy.KEEP,
+            syncRequest
+        )
+    }
+
+    /**
+     * Registers a network callback that triggers instant sync when connectivity returns.
+     */
+    private fun registerNetworkCallback() {
+        val networkRequest = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
         try {
-            // 1. Fetch all unsynced logs directly from the local database
-            val unsyncedLogs = db.gpsLogDao().getUnsyncedLogsForUser(userId)
-            
-            if (unsyncedLogs.isEmpty()) return
-
-            // 2. Map Entity to DTO
-            val logDtos = unsyncedLogs.map { entity ->
-                GpsLogDto(
-                    latitude = entity.latitude,
-                    longitude = entity.longitude,
-                    timestamp = entity.timestamp.replace(" ", "T"),
-                    accuracy = entity.accuracy?.toDouble(),
-                    synced = true // Signal that we are syncing these
-                )
-            }
-
-            // 3. Make Retrofit Network Call
-            val apiService = RetrofitClient.getApiService(applicationContext)
-            val response = apiService.submitGpsLogs(logDtos)
-
-            // 4. Update the syncing status using the optimized DAO method
-            if (response.isSuccessful && response.body()?.success == true) {
-                val syncedIds = unsyncedLogs.map { it.id }
-                db.gpsLogDao().markAsSynced(syncedIds)
-            }
+            connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+            Log.d("LocationTrackingService", "Network callback registered")
         } catch (e: Exception) {
-            e.printStackTrace() // Silent fail on background sync error
+            Log.e("LocationTrackingService", "Failed to register network callback: ${e.message}")
+        }
+    }
+
+    /**
+     * Unregisters the network callback.
+     */
+    private fun unregisterNetworkCallback() {
+        try {
+            connectivityManager.unregisterNetworkCallback(networkCallback)
+            Log.d("LocationTrackingService", "Network callback unregistered")
+        } catch (e: Exception) {
+            Log.e("LocationTrackingService", "Failed to unregister network callback: ${e.message}")
         }
     }
 

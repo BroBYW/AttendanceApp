@@ -25,17 +25,23 @@ class HistoryFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        val swipeRefresh = view.findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.swipeRefreshHistory)
         val rvFullHistory = view.findViewById<RecyclerView>(R.id.rvFullHistory)
         val layoutHistoryEmpty = view.findViewById<LinearLayout>(R.id.layoutHistoryEmpty)
 
         rvFullHistory.layoutManager = LinearLayoutManager(requireContext())
+        
+        swipeRefresh.setColorSchemeResources(R.color.secondary)
+        swipeRefresh.setOnRefreshListener {
+            fetchAttendanceHistory(rvFullHistory, layoutHistoryEmpty, swipeRefresh)
+        }
 
-        rvFullHistory.layoutManager = LinearLayoutManager(requireContext())
-
-        fetchAttendanceHistory(rvFullHistory, layoutHistoryEmpty)
+        fetchAttendanceHistory(rvFullHistory, layoutHistoryEmpty, swipeRefresh)
     }
 
-    private fun fetchAttendanceHistory(rvFullHistory: RecyclerView, layoutHistoryEmpty: LinearLayout) {
+    private fun fetchAttendanceHistory(rvFullHistory: RecyclerView, layoutHistoryEmpty: LinearLayout, swipeRefresh: androidx.swiperefreshlayout.widget.SwipeRefreshLayout) {
+        if (view == null) return
+        swipeRefresh.isRefreshing = true
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val apiService = RetrofitClient.getApiService(requireContext())
@@ -68,6 +74,8 @@ class HistoryFragment : Fragment() {
                 }
             } catch (e: Exception) {
                 Toast.makeText(context, "Network error: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                swipeRefresh.isRefreshing = false
             }
         }
     }
