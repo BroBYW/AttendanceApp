@@ -252,6 +252,7 @@ class HomeFragment : Fragment() {
                                             longitude = entity.longitude,
                                             timestamp = entity.timestamp.replace(" ", "T"),
                                             accuracy = entity.accuracy?.toDouble(),
+                                            remark = entity.remark,
                                             synced = true
                                         )
                                     }
@@ -313,7 +314,7 @@ class HomeFragment : Fragment() {
                 // Not Clocked In
                 btnClockIn.visibility = View.VISIBLE
                 btnClockIn.isEnabled = true
-                btnClockIn.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.primary))
+                btnClockIn.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.success))
                 btnClockIn.setTextColor(ContextCompat.getColor(requireContext(), R.color.on_primary))
                 
                 btnClockOut.visibility = View.GONE

@@ -50,6 +50,17 @@
                 android:text="Accuracy: 10m"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvRemark"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Remark text"
+                android:textColor="?attr/colorSecondary"
+                android:textSize="13sp"
+                android:textStyle="italic"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Time -->

@@ -12,5 +12,6 @@ data class GpsLogEntity(
     val longitude: Double,
     val timestamp: String,
     val accuracy: Float?,
+    val remark: String? = null,
     val synced: Boolean = false
 )

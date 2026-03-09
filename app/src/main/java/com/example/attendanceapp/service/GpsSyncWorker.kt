@@ -57,6 +57,7 @@ class GpsSyncWorker(
                     longitude = entity.longitude,
                     timestamp = entity.timestamp.replace(" ", "T"),
                     accuracy = entity.accuracy?.toDouble(),
+                    remark = entity.remark,
                     synced = true
                 )
             }

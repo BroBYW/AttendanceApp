@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Allow cleartext HTTP connections to the Android Emulator host loopback address -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- If you test on a physical device, add your computer's local Wi-Fi IP below as well -->
+        <domain includeSubdomains="true">172.20.10.3</domain>
+    </domain-config>
+</network-security-config>

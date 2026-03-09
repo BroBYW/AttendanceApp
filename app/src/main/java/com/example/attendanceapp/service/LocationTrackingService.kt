@@ -32,6 +32,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
 import com.example.attendanceapp.data.network.RetrofitClient
 import com.example.attendanceapp.data.network.dto.GpsLogDto
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class LocationTrackingService : Service() {
 
@@ -42,6 +44,9 @@ class LocationTrackingService : Service() {
     // AlarmManager components for exactly hourly wakes
     private lateinit var alarmManager: AlarmManager
     private lateinit var alarmIntent: PendingIntent
+    
+    // Auto clock out PendingIntent
+    private lateinit var autoClockOutIntent: PendingIntent
     
     // Network connectivity callback for instant sync on reconnect
     private lateinit var connectivityManager: ConnectivityManager
@@ -63,6 +68,8 @@ class LocationTrackingService : Service() {
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_FORCE_LOG = "ACTION_FORCE_LOG"
         const val ACTION_ALARM_WAKE = "ACTION_ALARM_WAKE"
+        const val ACTION_AUTO_CLOCK_OUT = "ACTION_AUTO_CLOCK_OUT"
+        const val EXTRA_REMARK = "EXTRA_REMARK"
         
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "LocationTrackerChannel"
@@ -83,6 +90,16 @@ class LocationTrackingService : Service() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+
+        val autoIntent = Intent(this, LocationTrackingService::class.java).apply {
+            action = ACTION_AUTO_CLOCK_OUT
+        }
+        autoClockOutIntent = PendingIntent.getService(
+            this,
+            3,
+            autoIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -95,10 +112,14 @@ class LocationTrackingService : Service() {
                     stopTracking()
                 }
                 ACTION_FORCE_LOG, ACTION_ALARM_WAKE -> {
-                    logLocationAndUpdateNotification()
+                    val remark = intent.getStringExtra(EXTRA_REMARK)
+                    logLocationAndUpdateNotification(remark)
                     if (intent.action == ACTION_ALARM_WAKE) {
                         scheduleNextAlarm()
                     }
+                }
+                ACTION_AUTO_CLOCK_OUT -> {
+                    performAutoClockOut()
                 }
             }
         }
@@ -111,10 +132,13 @@ class LocationTrackingService : Service() {
         startForeground(NOTIFICATION_ID, createNotification("Starting GPS Logger..."))
         
         // Take immediate log
-        logLocationAndUpdateNotification()
+        logLocationAndUpdateNotification(null)
         
         // Schedule periodic alarm for GPS capture
         scheduleNextAlarm()
+        
+        // Schedule auto clock out at 11:59 PM
+        scheduleAutoClockOutAlarm()
         
         // Schedule periodic WorkManager sync with network constraint (backup)
         schedulePeriodicSync()
@@ -126,6 +150,7 @@ class LocationTrackingService : Service() {
     private fun stopTracking() {
         AppPreferences.setTrackingActive(applicationContext, false)
         alarmManager.cancel(alarmIntent)
+        alarmManager.cancel(autoClockOutIntent)
         WorkManager.getInstance(applicationContext).cancelUniqueWork(GpsSyncWorker.WORK_NAME_PERIODIC)
         unregisterNetworkCallback()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -150,7 +175,32 @@ class LocationTrackingService : Service() {
         }
     }
 
-    private fun logLocationAndUpdateNotification() {
+    private fun scheduleAutoClockOutAlarm() {
+        val calendar = java.util.Calendar.getInstance()
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 23)
+        calendar.set(java.util.Calendar.MINUTE, 59)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+
+        // If it's already past 23:59, schedule for tomorrow
+        if (calendar.timeInMillis <= System.currentTimeMillis()) {
+            calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, autoClockOutIntent)
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, autoClockOutIntent)
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, autoClockOutIntent)
+        } else {
+            alarmManager.setExact(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, autoClockOutIntent)
+        }
+    }
+
+    private fun logLocationAndUpdateNotification(remark: String? = null) {
         scope.launch {
             if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 return@launch
@@ -175,6 +225,7 @@ class LocationTrackingService : Service() {
                             longitude = location.longitude,
                             timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
                             accuracy = location.accuracy,
+                            remark = remark,
                             synced = false
                         )
                     )
@@ -200,6 +251,7 @@ class LocationTrackingService : Service() {
                             longitude = 0.0,
                             timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
                             accuracy = 0.0f,
+                            remark = remark,
                             synced = false
                         )
                     )
@@ -228,6 +280,7 @@ class LocationTrackingService : Service() {
                         longitude = entity.longitude,
                         timestamp = entity.timestamp.replace(" ", "T"),
                         accuracy = entity.accuracy?.toDouble(),
+                        remark = entity.remark,
                         synced = true // Signal that we are syncing these
                     )
                 }
@@ -245,6 +298,64 @@ class LocationTrackingService : Service() {
                 e.printStackTrace()
                 // Network failed — enqueue a one-shot sync that fires when back online
                 enqueueOneshotSync()
+            }
+        }
+    }
+
+    private fun performAutoClockOut() {
+        scope.launch {
+            if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                return@launch
+            }
+
+            try {
+                val fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
+                val cancellationTokenSource = com.google.android.gms.tasks.CancellationTokenSource()
+                val locationTask = fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationTokenSource.token)
+                val location: Location? = Tasks.await(locationTask)
+
+                val lat = location?.latitude ?: 0.0
+                val lng = location?.longitude ?: 0.0
+                val accuracy = location?.accuracy ?: 0.0f
+
+                val apiService = RetrofitClient.getApiService(applicationContext)
+                val requestObj = com.example.attendanceapp.data.network.dto.ClockOutRequest(
+                    latitude = lat,
+                    longitude = lng
+                )
+                val jsonString = com.google.gson.Gson().toJson(requestObj)
+                val mediaType = "application/json".toMediaTypeOrNull()
+                val dataPart = jsonString.toRequestBody(mediaType)
+
+                val response = apiService.clockOut(dataPart, null)
+
+                if (response.isSuccessful && response.body()?.success == true) {
+                    val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
+                    if (userId != -1L) {
+                        val db = AppDatabase.getDatabase(applicationContext)
+                        db.gpsLogDao().insertLog(
+                            GpsLogEntity(
+                                userId = userId,
+                                latitude = lat,
+                                longitude = lng,
+                                timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
+                                accuracy = accuracy,
+                                synced = false
+                            )
+                        )
+                        syncLogsWithServer(db, userId)
+                    }
+
+                    // Stop tracking and clear preferences
+                    AppPreferences.clearClockInTime(applicationContext)
+                    withContext(Dispatchers.Main) {
+                        stopTracking()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Let it stay on if network failed, or stop anyway? Usually we might stop and let them know next morning.
+                // For now, let's wait until it works, or we can just stop it and lose their clock out event temporarily.
             }
         }
     }
@@ -320,20 +431,11 @@ class LocationTrackingService : Service() {
     }
 
     private fun createNotification(content: String): Notification {
-        // Action Intents
-        val stopIntent = Intent(this, LocationTrackingService::class.java).apply { action = ACTION_STOP }
-        val stopPendingIntent = PendingIntent.getService(this, 1, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
-        val forceIntent = Intent(this, LocationTrackingService::class.java).apply { action = ACTION_FORCE_LOG }
-        val forcePendingIntent = PendingIntent.getService(this, 2, forceIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("GPS Tracker Active")
             .setContentText(content)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
-            .addAction(R.mipmap.ic_launcher, "Stop", stopPendingIntent)
-            .addAction(R.mipmap.ic_launcher, "Force Log", forcePendingIntent)
             .build()
     }
 

@@ -222,14 +222,14 @@
             app:iconSize="22dp"
             app:iconTint="@color/white" />
 
-        <!-- Retake Button (Ghost/Outlined) -->
+        <!-- Back Button (Ghost/Outlined) -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRetake"
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:layout_marginTop="8dp"
-            android:text="Retake Photo"
+            android:text="Back To Home"
             android:textAllCaps="false"
             android:textSize="16sp"
             app:cornerRadius="28dp"

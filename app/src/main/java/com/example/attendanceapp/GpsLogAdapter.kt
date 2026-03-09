@@ -13,6 +13,7 @@ class GpsLogAdapter(private var logs: List<GpsLogEntity>) :
     class GpsLogViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvCoordinates: TextView = view.findViewById(R.id.tvCoordinates)
         val tvAccuracy: TextView = view.findViewById(R.id.tvAccuracy)
+        val tvRemark: TextView = view.findViewById(R.id.tvRemark)
         val tvTimestamp: TextView = view.findViewById(R.id.tvTimestamp)
     }
 
@@ -27,6 +28,13 @@ class GpsLogAdapter(private var logs: List<GpsLogEntity>) :
         holder.tvCoordinates.text = "Lat: ${log.latitude}, Lng: ${log.longitude}"
         holder.tvAccuracy.text = "Accuracy: ${log.accuracy ?: 0.0}m"
         holder.tvTimestamp.text = log.timestamp
+        
+        if (!log.remark.isNullOrBlank()) {
+            holder.tvRemark.visibility = View.VISIBLE
+            holder.tvRemark.text = "Note: ${log.remark}"
+        } else {
+            holder.tvRemark.visibility = View.GONE
+        }
     }
 
     override fun getItemCount() = logs.size

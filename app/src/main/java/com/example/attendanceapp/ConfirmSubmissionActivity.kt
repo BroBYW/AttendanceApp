@@ -46,6 +46,8 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
     private var currentLongitude: Double? = null
     private var currentAccuracy: Float? = null
 
+    private var tempUploadFile: java.io.File? = null
+
     private lateinit var locationHelper: LocationHelper
     private lateinit var tvLocationValue: TextView
     private lateinit var tvLocationAccuracy: TextView
@@ -126,9 +128,9 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
             submitAttendance()
         }
 
-        // Retake photo button
-        val btnRetake = findViewById<MaterialButton>(R.id.btnRetake)
-        btnRetake.setOnClickListener {
+        // Back to home button
+        val btnBackToHome = findViewById<MaterialButton>(R.id.btnRetake)
+        btnBackToHome.setOnClickListener {
             finish()
         }
 
@@ -248,6 +250,7 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
                 if (photoUri != null) {
                     val file = getFileFromUri(Uri.parse(photoUri!!))
                     if (file != null) {
+                        tempUploadFile = file
                         val reqFile = file.asRequestBody("image/*".toMediaTypeOrNull())
                         selfiePart = okhttp3.MultipartBody.Part.createFormData("selfie", file.name, reqFile)
                     }
@@ -267,9 +270,26 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
 
                 launch(Dispatchers.Main) {
                     if (response.isSuccessful && response.body()?.success == true) {
+                        deleteLocalPhotos()
                         showSuccessAndFinish()
                     } else {
-                        android.widget.Toast.makeText(this@ConfirmSubmissionActivity, "Failed to submit: ${response.message()}", android.widget.Toast.LENGTH_LONG).show()
+                        var errorMessage = "Failed to submit"
+                        try {
+                            val errorString = response.errorBody()?.string()
+                            if (errorString != null) {
+                                val jsonObject = org.json.JSONObject(errorString)
+                                errorMessage = jsonObject.optString("message", errorMessage)
+                            }
+                        } catch (e: Exception) {
+                            errorMessage += ": ${response.message()}"
+                        }
+                        
+                        // User-friendly overwrite for this specific case
+                        if (errorMessage.contains("Already clocked in today", ignoreCase = true)) {
+                            errorMessage = "You can only clock in once per day!"
+                        }
+
+                        android.widget.Toast.makeText(this@ConfirmSubmissionActivity, errorMessage, android.widget.Toast.LENGTH_LONG).show()
                         btnSubmit.isEnabled = true
                     }
                 }
@@ -300,6 +320,36 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
             finish()
         }, 1500)
+    }
+
+    private fun deleteLocalPhotos() {
+        try {
+            // 1. Delete the temporary upload copy from cacheDir
+            tempUploadFile?.let {
+                if (it.exists()) {
+                    it.delete()
+                }
+            }
+
+            // 2. Delete the original captured photo from external files dir
+            photoUri?.let { uriString ->
+                val uri = Uri.parse(uriString)
+                val originalPath = uri.path
+                if (originalPath != null) {
+                    // ContentProvider paths often look like /my_images/Pictures/JPEG_2024...
+                    // We need to resolve it back to the actual file path or delete via ContentResolver
+                    try {
+                        contentResolver.delete(uri, null, null)
+                    } catch (e: Exception) {
+                        // Fallback fallback if it's just a raw path
+                        val file = java.io.File(originalPath)
+                        if (file.exists()) file.delete()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun getFileFromUri(uri: Uri): java.io.File? {
