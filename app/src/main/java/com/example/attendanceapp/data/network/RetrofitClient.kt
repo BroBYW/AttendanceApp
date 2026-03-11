@@ -14,7 +14,7 @@ object RetrofitClient {
     // Depending on emulator and server config. If testing locally:
     // "http://10.0.2.2:3060/" for Android emulator connecting to localhost.
     // Replace if deploying to a physical device on local wifi with your IPv4 address (e.g. "http://192.168.1.100:3060/").
-    private const val BASE_URL = "http://172.20.10.3:3060/" 
+    private const val BASE_URL = "https://attendance2.tecyla.top/"
 
     private fun getOkHttpClient(context: Context): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
