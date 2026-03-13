@@ -15,8 +15,12 @@ import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
 import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -53,6 +57,7 @@ class LocationTrackingService : Service() {
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             Log.d("LocationTrackingService", "Network available — triggering GPS sync")
+            AttendanceSyncScheduler.enqueueOneShot(applicationContext)
             scope.launch {
                 val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
                 if (userId != -1L) {
@@ -64,11 +69,13 @@ class LocationTrackingService : Service() {
     }
 
     companion object {
+        private const val TAG = "LocationTrackingService"
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_FORCE_LOG = "ACTION_FORCE_LOG"
         const val ACTION_ALARM_WAKE = "ACTION_ALARM_WAKE"
         const val ACTION_AUTO_CLOCK_OUT = "ACTION_AUTO_CLOCK_OUT"
+        const val ACTION_LOG_INSERTED = "com.example.attendanceapp.ACTION_LOG_INSERTED"
         const val EXTRA_REMARK = "EXTRA_REMARK"
         
         const val NOTIFICATION_ID = 1001
@@ -127,6 +134,11 @@ class LocationTrackingService : Service() {
     }
 
     private fun startTracking() {
+        if (AppPreferences.isTrackingActive(applicationContext)) {
+            Log.d(TAG, "Tracking already active, skip duplicate start")
+            return
+        }
+
         AppPreferences.setTrackingActive(applicationContext, true)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification("Starting GPS Logger..."))
@@ -142,6 +154,8 @@ class LocationTrackingService : Service() {
         
         // Schedule periodic WorkManager sync with network constraint (backup)
         schedulePeriodicSync()
+        AttendanceSyncScheduler.schedulePeriodic(applicationContext)
+        AttendanceSyncScheduler.enqueueOneShot(applicationContext)
         
         // Register network callback for instant sync on reconnect
         registerNetworkCallback()
@@ -229,6 +243,13 @@ class LocationTrackingService : Service() {
                             synced = false
                         )
                     )
+
+                    sendBroadcast(
+                        Intent(ACTION_LOG_INSERTED)
+                            .setPackage(packageName)
+                            .putExtra("latitude", location.latitude)
+                            .putExtra("longitude", location.longitude)
+                    )
                     
                     // Attempt to sync logs with the server immediately
                     // If this fails (no network), the WorkManager will retry when online
@@ -239,25 +260,9 @@ class LocationTrackingService : Service() {
                     val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     notificationManager.notify(NOTIFICATION_ID, createNotification(msg))
                 } else {
-                    val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
-                    if (userId == -1L) return@launch // Don't log if no user
-
-                    // Fallback to force database creation if emulator has no GPS fix yet
-                    val db = AppDatabase.getDatabase(applicationContext)
-                    db.gpsLogDao().insertLog(
-                        GpsLogEntity(
-                            userId = userId,
-                            latitude = 0.0,
-                            longitude = 0.0,
-                            timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()),
-                            accuracy = 0.0f,
-                            remark = remark,
-                            synced = false
-                        )
-                    )
-                    
+                    Log.w(TAG, "GPS fix unavailable; skipping log insert to avoid invalid 0,0 coordinates")
                     val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    notificationManager.notify(NOTIFICATION_ID, createNotification("Searching for GPS... (Logged 0.0)"))
+                    notificationManager.notify(NOTIFICATION_ID, createNotification("Searching for GPS fix..."))
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -308,20 +313,54 @@ class LocationTrackingService : Service() {
                 return@launch
             }
 
+            val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
+            if (userId == -1L) return@launch
+
+            var lat: Double? = null
+            var lng: Double? = null
+            var accuracy: Float? = null
+
             try {
+                val db = AppDatabase.getDatabase(applicationContext)
                 val fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
                 val cancellationTokenSource = com.google.android.gms.tasks.CancellationTokenSource()
                 val locationTask = fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cancellationTokenSource.token)
                 val location: Location? = Tasks.await(locationTask)
 
-                val lat = location?.latitude ?: 0.0
-                val lng = location?.longitude ?: 0.0
-                val accuracy = location?.accuracy ?: 0.0f
+                if (location != null) {
+                    lat = location.latitude
+                    lng = location.longitude
+                    accuracy = location.accuracy
+                } else {
+                    val fallback = db.gpsLogDao().getLatestValidLogForUser(userId)
+                    if (fallback != null) {
+                        lat = fallback.latitude
+                        lng = fallback.longitude
+                        accuracy = fallback.accuracy ?: 0.0f
+                        Log.w(TAG, "Auto clock-out GPS fix unavailable; using latest valid cached location")
+                    } else {
+                        Log.w(TAG, "Auto clock-out skipped: GPS fix unavailable and no valid cached location")
+                        return@launch
+                    }
+                }
+
+                val resolvedLat = lat ?: run {
+                    Log.w(TAG, "Auto clock-out skipped: resolved latitude is unavailable")
+                    return@launch
+                }
+                val resolvedLng = lng ?: run {
+                    Log.w(TAG, "Auto clock-out skipped: resolved longitude is unavailable")
+                    return@launch
+                }
+                val resolvedAccuracy = accuracy ?: 0.0f
 
                 val apiService = RetrofitClient.getApiService(applicationContext)
                 val requestObj = com.example.attendanceapp.data.network.dto.ClockOutRequest(
-                    latitude = lat,
-                    longitude = lng
+                    latitude = resolvedLat,
+                    longitude = resolvedLng,
+                    clientEventId = UUID.randomUUID().toString(),
+                    clientTimestamp = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                    queuedOffline = false
                 )
                 val jsonString = com.google.gson.Gson().toJson(requestObj)
                 val mediaType = "application/json".toMediaTypeOrNull()
@@ -330,34 +369,76 @@ class LocationTrackingService : Service() {
                 val response = apiService.clockOut(dataPart, null)
 
                 if (response.isSuccessful && response.body()?.success == true) {
-                    val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
-                    if (userId != -1L) {
-                        val db = AppDatabase.getDatabase(applicationContext)
-                        db.gpsLogDao().insertLog(
-                            GpsLogEntity(
-                                userId = userId,
-                                latitude = lat,
-                                longitude = lng,
-                                timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
-                                accuracy = accuracy,
-                                synced = false
-                            )
-                        )
-                        syncLogsWithServer(db, userId)
-                    }
-
-                    // Stop tracking and clear preferences
-                    AppPreferences.clearClockInTime(applicationContext)
-                    withContext(Dispatchers.Main) {
-                        stopTracking()
+                    AttendanceOfflineQueue.recordSyncedClockOut(
+                        context = applicationContext,
+                        userId = userId,
+                        request = requestObj.copy(queuedOffline = false)
+                    )
+                    finalizeAutoClockOut(resolvedLat, resolvedLng, resolvedAccuracy)
+                } else if (isRetriableHttpFailure(response.code())) {
+                    val queued = AttendanceOfflineQueue.enqueueClockOut(
+                        context = applicationContext,
+                        userId = userId,
+                        request = requestObj.copy(queuedOffline = true)
+                    )
+                    if (queued != -1L) {
+                        finalizeAutoClockOut(resolvedLat, resolvedLng, resolvedAccuracy)
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                // Let it stay on if network failed, or stop anyway? Usually we might stop and let them know next morning.
-                // For now, let's wait until it works, or we can just stop it and lose their clock out event temporarily.
+
+                if (lat == null || lng == null) {
+                    Log.w(TAG, "Auto clock-out queue skipped: no valid location available")
+                    return@launch
+                }
+                val fallbackLat = lat ?: return@launch
+                val fallbackLng = lng ?: return@launch
+
+                val fallbackRequest = com.example.attendanceapp.data.network.dto.ClockOutRequest(
+                    latitude = fallbackLat,
+                    longitude = fallbackLng,
+                    clientEventId = UUID.randomUUID().toString(),
+                    clientTimestamp = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                    queuedOffline = true
+                )
+                val queued = AttendanceOfflineQueue.enqueueClockOut(
+                    context = applicationContext,
+                    userId = userId,
+                    request = fallbackRequest
+                )
+                if (queued != -1L) {
+                    finalizeAutoClockOut(fallbackLat, fallbackLng, accuracy ?: 0.0f)
+                }
             }
         }
+    }
+
+    private suspend fun finalizeAutoClockOut(lat: Double, lng: Double, accuracy: Float) {
+        val userId = com.example.attendanceapp.utils.SessionManager(applicationContext).getUserId()
+        if (userId != -1L) {
+            val db = AppDatabase.getDatabase(applicationContext)
+            db.gpsLogDao().insertLog(
+                GpsLogEntity(
+                    userId = userId,
+                    latitude = lat,
+                    longitude = lng,
+                    timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
+                    accuracy = accuracy,
+                    synced = false
+                )
+            )
+            syncLogsWithServer(db, userId)
+        }
+
+        AppPreferences.clearClockInTime(applicationContext)
+        withContext(Dispatchers.Main) {
+            stopTracking()
+        }
+    }
+
+    private fun isRetriableHttpFailure(code: Int): Boolean {
+        return code >= 500 || code == 408 || code == 429
     }
 
     /**

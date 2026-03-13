@@ -7,5 +7,8 @@ data class ClockInRequest(
     val officeAreaId: Long?,
     val reason: String?,
     val documentUrl: String?,
-    val notes: String?
+    val notes: String?,
+    val clientEventId: String? = null,
+    val clientTimestamp: String? = null,
+    val queuedOffline: Boolean? = null
 )

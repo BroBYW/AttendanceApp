@@ -3,11 +3,13 @@ package com.example.attendanceapp.data.network
 import android.content.Context
 import com.example.attendanceapp.utils.SessionManager
 import okhttp3.Interceptor
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
+import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
@@ -35,6 +37,14 @@ object RetrofitClient {
         return OkHttpClient.Builder()
             .addInterceptor(loggingInterceptor)
             .addInterceptor(authInterceptor)
+            .dns(object : Dns {
+                override fun lookup(hostname: String): List<java.net.InetAddress> {
+                    return Dns.SYSTEM.lookup(hostname).sortedBy { address ->
+                        if (address is Inet4Address) 0 else 1
+                    }
+                }
+            })
+            .retryOnConnectionFailure(true)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)

@@ -17,6 +17,7 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import com.example.attendanceapp.service.AttendanceSyncScheduler
 
 class LoginActivity : AppCompatActivity() {
 
@@ -145,6 +146,8 @@ class LoginActivity : AppCompatActivity() {
                             it.user.assignedOfficeAreaIds
                         )
                     }
+                    AttendanceSyncScheduler.schedulePeriodic(this@LoginActivity)
+                    AttendanceSyncScheduler.enqueueOneShot(this@LoginActivity)
 
                     android.widget.Toast.makeText(this@LoginActivity, "Login Successful", android.widget.Toast.LENGTH_SHORT).show()
                     

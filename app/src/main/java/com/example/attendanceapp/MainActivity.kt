@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.example.attendanceapp.service.AttendanceSyncScheduler
 
 class MainActivity : AppCompatActivity() {
 
@@ -12,6 +13,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        AttendanceSyncScheduler.schedulePeriodic(this)
+        AttendanceSyncScheduler.enqueueOneShot(this)
 
         bottomNav = findViewById(R.id.bottomNav)
 

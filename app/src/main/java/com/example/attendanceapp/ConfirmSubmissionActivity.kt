@@ -3,9 +3,14 @@ package com.example.attendanceapp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.UUID
 
 import android.Manifest
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.location.Location
 import android.net.Uri
 import android.os.Bundle
@@ -35,6 +40,7 @@ import org.osmdroid.views.overlay.Marker
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import retrofit2.Response
 
 class ConfirmSubmissionActivity : AppCompatActivity() {
 
@@ -56,6 +62,7 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
     private lateinit var ivSuccessOverlay: ImageView
     private lateinit var mapView: MapView
     private lateinit var cardMap: MaterialCardView
+    private var mapEnabled: Boolean = true
 
     // Permission request launcher
     private val requestLocationPermission = registerForActivityResult(
@@ -86,9 +93,18 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         // Initialize map
         mapView = findViewById(R.id.mapView)
         cardMap = findViewById(R.id.cardMap)
-        mapView.setTileSource(TileSourceFactory.MAPNIK)
-        mapView.setMultiTouchControls(true)
-        mapView.controller.setZoom(17.0)
+        mapEnabled = !isRunningOnEmulator()
+        if (mapEnabled) {
+            mapView.setTileSource(TileSourceFactory.MAPNIK)
+            mapView.setMultiTouchControls(true)
+            mapView.controller.setZoom(17.0)
+            mapView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        } else {
+            // Emulator SystemUI can ANR when heavy map rendering is active.
+            cardMap.visibility = View.GONE
+            mapView.setUseDataConnection(false)
+            mapView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+        }
 
         // Initialize location helper
         locationHelper = LocationHelper(this)
@@ -169,8 +185,10 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
                     "Accuracy: ±%.1f meters", location.accuracy
                 )
 
-                // Show map with marker
-                showLocationOnMap(location.latitude, location.longitude)
+                // Show map with marker (disabled on emulator for stability)
+                if (mapEnabled) {
+                    showLocationOnMap(location.latitude, location.longitude)
+                }
 
                 // Enable submit button now that location is ready
                 btnSubmit.isEnabled = true
@@ -195,10 +213,10 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         btnSubmit.isEnabled = false
 
         lifecycleScope.launch(Dispatchers.IO) {
+            val sessionManager = com.example.attendanceapp.utils.SessionManager(this@ConfirmSubmissionActivity)
+            var requestObj: com.example.attendanceapp.data.network.dto.ClockInRequest? = null
             try {
                 val apiService = com.example.attendanceapp.data.network.RetrofitClient.getApiService(this@ConfirmSubmissionActivity)
-
-                val sessionManager = com.example.attendanceapp.utils.SessionManager(this@ConfirmSubmissionActivity)
 
                 // Refresh user profile to get latest assigned office area IDs
                 var assignedOfficeId = sessionManager.getOfficeAreaId()
@@ -232,14 +250,17 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
                 }
 
                 // Prepare JSON data part
-                val requestObj = com.example.attendanceapp.data.network.dto.ClockInRequest(
+                requestObj = com.example.attendanceapp.data.network.dto.ClockInRequest(
                     clockInType = clockType?.uppercase() ?: "NORMAL",
                     latitude = currentLatitude!!,
                     longitude = currentLongitude!!,
                     officeAreaId = assignedOfficeId,
                     reason = lateReason,
                     documentUrl = null,
-                    notes = null
+                    notes = null,
+                    clientEventId = UUID.randomUUID().toString(),
+                    clientTimestamp = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                    queuedOffline = false
                 )
                 val jsonString = com.google.gson.Gson().toJson(requestObj)
                 val mediaType = "application/json".toMediaTypeOrNull()
@@ -248,10 +269,10 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
                 // Prepare Photo Part
                 var selfiePart: okhttp3.MultipartBody.Part? = null
                 if (photoUri != null) {
-                    val file = getFileFromUri(Uri.parse(photoUri!!))
+                    val file = getCompressedImageFileFromUri(Uri.parse(photoUri!!))
                     if (file != null) {
                         tempUploadFile = file
-                        val reqFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                        val reqFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
                         selfiePart = okhttp3.MultipartBody.Part.createFormData("selfie", file.name, reqFile)
                     }
                 }
@@ -268,38 +289,110 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
 
                 val response = apiService.clockIn(dataPart, selfiePart, docPart)
 
-                launch(Dispatchers.Main) {
-                    if (response.isSuccessful && response.body()?.success == true) {
+                if (response.isSuccessful && response.body()?.success == true) {
+                    if (requestObj != null && sessionManager.getUserId() != -1L) {
+                        com.example.attendanceapp.service.AttendanceOfflineQueue.recordSyncedClockIn(
+                            context = this@ConfirmSubmissionActivity,
+                            userId = sessionManager.getUserId(),
+                            request = requestObj.copy(queuedOffline = false)
+                        )
+                    }
+                    launch(Dispatchers.Main) {
                         deleteLocalPhotos()
                         showSuccessAndFinish()
-                    } else {
-                        var errorMessage = "Failed to submit"
-                        try {
-                            val errorString = response.errorBody()?.string()
-                            if (errorString != null) {
-                                val jsonObject = org.json.JSONObject(errorString)
-                                errorMessage = jsonObject.optString("message", errorMessage)
-                            }
-                        } catch (e: Exception) {
-                            errorMessage += ": ${response.message()}"
-                        }
-                        
-                        // User-friendly overwrite for this specific case
-                        if (errorMessage.contains("Already clocked in today", ignoreCase = true)) {
-                            errorMessage = "You can only clock in once per day!"
-                        }
+                    }
+                } else {
+                    var errorMessage = extractErrorMessage(response)
+                    if (errorMessage.contains("Already clocked in today", ignoreCase = true)) {
+                        errorMessage = "You can only clock in once per day!"
+                    }
 
-                        android.widget.Toast.makeText(this@ConfirmSubmissionActivity, errorMessage, android.widget.Toast.LENGTH_LONG).show()
-                        btnSubmit.isEnabled = true
+                    if (isRetriableHttpFailure(response.code()) && requestObj != null) {
+                        val queued = queueClockInForLater(requestObj, sessionManager)
+                        launch(Dispatchers.Main) {
+                            if (queued) {
+                                deleteLocalPhotos()
+                                android.widget.Toast.makeText(
+                                    this@ConfirmSubmissionActivity,
+                                    "No stable network. Clock-in saved and will auto-sync.",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                                showSuccessAndFinish()
+                            } else {
+                                android.widget.Toast.makeText(
+                                    this@ConfirmSubmissionActivity,
+                                    "Submission failed and offline save also failed. Please try again.",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                                btnSubmit.isEnabled = true
+                            }
+                        }
+                    } else {
+                        launch(Dispatchers.Main) {
+                            android.widget.Toast.makeText(this@ConfirmSubmissionActivity, errorMessage, android.widget.Toast.LENGTH_LONG).show()
+                            btnSubmit.isEnabled = true
+                        }
                     }
                 }
             } catch (e: Exception) {
+                val queued = if (requestObj != null) {
+                    queueClockInForLater(requestObj, sessionManager)
+                } else {
+                    false
+                }
+
                 launch(Dispatchers.Main) {
-                    android.widget.Toast.makeText(this@ConfirmSubmissionActivity, "Network error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                    btnSubmit.isEnabled = true
+                    if (queued) {
+                        deleteLocalPhotos()
+                        android.widget.Toast.makeText(
+                            this@ConfirmSubmissionActivity,
+                            "Offline mode: clock-in saved and will sync automatically.",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                        showSuccessAndFinish()
+                    } else {
+                        android.widget.Toast.makeText(this@ConfirmSubmissionActivity, "Network error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                        btnSubmit.isEnabled = true
+                    }
                 }
             }
         }
+    }
+
+    private suspend fun queueClockInForLater(
+        requestObj: com.example.attendanceapp.data.network.dto.ClockInRequest?,
+        sessionManager: com.example.attendanceapp.utils.SessionManager
+    ): Boolean {
+        if (requestObj == null) return false
+        val userId = sessionManager.getUserId()
+        if (userId == -1L) return false
+
+        val rowId = com.example.attendanceapp.service.AttendanceOfflineQueue.enqueueClockIn(
+            context = this@ConfirmSubmissionActivity,
+            userId = userId,
+            request = requestObj.copy(queuedOffline = true),
+            photoUri = photoUri,
+            documentPath = attachmentPath
+        )
+        return rowId != -1L
+    }
+
+    private fun extractErrorMessage(response: Response<*>): String {
+        return try {
+            val errorString = response.errorBody()?.string()
+            if (errorString.isNullOrBlank()) {
+                "Failed to submit: ${response.message()}"
+            } else {
+                val jsonObject = org.json.JSONObject(errorString)
+                jsonObject.optString("message", "Failed to submit")
+            }
+        } catch (_: Exception) {
+            "Failed to submit: ${response.message()}"
+        }
+    }
+
+    private fun isRetriableHttpFailure(code: Int): Boolean {
+        return code >= 500 || code == 408 || code == 429
     }
 
     private fun showSuccessAndFinish() {
@@ -368,7 +461,27 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
         }
     }
 
+    private fun getCompressedImageFileFromUri(uri: Uri): java.io.File? {
+        return try {
+            val bitmap = contentResolver.openInputStream(uri)?.use { input ->
+                BitmapFactory.decodeStream(input)
+            } ?: return getFileFromUri(uri)
+
+            val tempFile = java.io.File.createTempFile("upload_", ".jpg", cacheDir)
+            java.io.FileOutputStream(tempFile).use { output ->
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 50, output)
+                output.flush()
+            }
+            bitmap.recycle()
+            tempFile
+        } catch (e: Exception) {
+            e.printStackTrace()
+            getFileFromUri(uri)
+        }
+    }
+
     private fun showLocationOnMap(latitude: Double, longitude: Double) {
+        if (!mapEnabled) return
         val point = GeoPoint(latitude, longitude)
         mapView.controller.setCenter(point)
 
@@ -384,18 +497,32 @@ class ConfirmSubmissionActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        mapView.onResume()
+        if (mapEnabled) mapView.onResume()
     }
 
     override fun onPause() {
         super.onPause()
-        mapView.onPause()
+        if (mapEnabled) mapView.onPause()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         locationHelper.stopLocationUpdates()
-        mapView.onDetach()
+        if (mapEnabled) mapView.onDetach()
+    }
+
+    private fun isRunningOnEmulator(): Boolean {
+        val fingerprint = Build.FINGERPRINT.lowercase(Locale.US)
+        val model = Build.MODEL.lowercase(Locale.US)
+        val product = Build.PRODUCT.lowercase(Locale.US)
+        val manufacturer = Build.MANUFACTURER.lowercase(Locale.US)
+        return fingerprint.contains("generic")
+            || fingerprint.contains("emulator")
+            || model.contains("emulator")
+            || model.contains("android sdk built for x86")
+            || manufacturer.contains("genymotion")
+            || product.contains("sdk")
+            || product.contains("emulator")
     }
 
     // Re-check location when user returns from Settings

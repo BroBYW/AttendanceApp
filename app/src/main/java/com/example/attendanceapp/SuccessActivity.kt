@@ -12,6 +12,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import android.os.Build
+import com.example.attendanceapp.data.AppPreferences
 import com.example.attendanceapp.service.LocationTrackingService
 
 class SuccessActivity : AppCompatActivity() {
@@ -46,6 +47,10 @@ class SuccessActivity : AppCompatActivity() {
     }
 
     private fun startLocationTracking() {
+        if (AppPreferences.isTrackingActive(this)) {
+            return
+        }
+
         val serviceIntent = Intent(this, LocationTrackingService::class.java)
         serviceIntent.action = LocationTrackingService.ACTION_START
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

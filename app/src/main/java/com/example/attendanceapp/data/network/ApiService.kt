@@ -29,6 +29,11 @@ interface ApiService {
     @POST("/api/gps-logs/batch")
     suspend fun submitGpsLogs(@Body logs: List<GpsLogDto>): Response<ApiResponse<String>>
 
+    @POST("/api/gps-logs/classify")
+    suspend fun classifyGpsLogs(
+        @Body logs: List<GpsLogClassifyRequest>
+    ): Response<ApiResponse<List<GpsLogClassifyResponse>>>
+
     @GET("/api/admin/users/me")
     suspend fun getMyProfile(): Response<ApiResponse<UserResponse>>
 

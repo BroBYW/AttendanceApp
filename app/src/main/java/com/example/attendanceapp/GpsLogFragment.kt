@@ -1,6 +1,8 @@
 package com.example.attendanceapp
 
 import android.os.Bundle
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -22,8 +24,13 @@ import android.content.Intent
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
 import com.example.attendanceapp.data.AppPreferences
+import com.example.attendanceapp.data.network.RetrofitClient
+import com.example.attendanceapp.data.network.dto.GpsLogClassifyRequest
+import com.example.attendanceapp.data.network.dto.GpsLogClassifyResponse
 import com.example.attendanceapp.service.LocationTrackingService
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import androidx.core.content.ContextCompat
+import android.content.IntentFilter
 
 class GpsLogFragment : Fragment() {
 
@@ -33,6 +40,25 @@ class GpsLogFragment : Fragment() {
     private lateinit var adapter: GpsLogAdapter
     private lateinit var swipeRefresh: androidx.swiperefreshlayout.widget.SwipeRefreshLayout
     private lateinit var fabAddLog: FloatingActionButton
+    private var forceLogReceiverRegistered = false
+    private val forceLogReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == LocationTrackingService.ACTION_LOG_INSERTED) {
+                val checkedIds = chipGroupFilter.checkedChipIds
+                val daysFilter = if (checkedIds.isEmpty()) 0 else {
+                    when (checkedIds.first()) {
+                        R.id.chipToday -> 0
+                        R.id.chip3Days -> 3
+                        R.id.chip7Days -> 7
+                        R.id.chip30Days -> 30
+                        R.id.chipAll -> null
+                        else -> 0
+                    }
+                }
+                loadGpsLogs(daysFilter)
+            }
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -81,6 +107,28 @@ class GpsLogFragment : Fragment() {
         if (::fabAddLog.isInitialized) {
             fabAddLog.visibility = if (AppPreferences.isTrackingActive(requireContext())) View.VISIBLE else View.GONE
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!forceLogReceiverRegistered) {
+            val filter = IntentFilter(LocationTrackingService.ACTION_LOG_INSERTED)
+            ContextCompat.registerReceiver(
+                requireContext(),
+                forceLogReceiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            forceLogReceiverRegistered = true
+        }
+    }
+
+    override fun onStop() {
+        if (forceLogReceiverRegistered) {
+            requireContext().unregisterReceiver(forceLogReceiver)
+            forceLogReceiverRegistered = false
+        }
+        super.onStop()
     }
     
     private fun setupFab() {
@@ -163,15 +211,50 @@ class GpsLogFragment : Fragment() {
                 }
             }
 
+            val classifiedByKey = withContext(Dispatchers.IO) {
+                classifyLogs(logs)
+            }
+
             if (logs.isEmpty()) {
                 rvGpsLogs.visibility = View.GONE
                 layoutEmptyState.visibility = View.VISIBLE
             } else {
                 rvGpsLogs.visibility = View.VISIBLE
                 layoutEmptyState.visibility = View.GONE
-                adapter.updateData(logs)
+                val uiItems = logs.map { log ->
+                    GpsLogUiItem(
+                        log = log,
+                        classification = classifiedByKey[log.id.toString()]
+                    )
+                }
+                adapter.updateData(uiItems)
             }
             swipeRefresh.isRefreshing = false
+        }
+    }
+
+    private suspend fun classifyLogs(logs: List<com.example.attendanceapp.data.GpsLogEntity>): Map<String, GpsLogClassifyResponse> {
+        if (logs.isEmpty()) return emptyMap()
+        return try {
+            val api = RetrofitClient.getApiService(requireContext())
+            val request = logs.map { log ->
+                GpsLogClassifyRequest(
+                    key = log.id.toString(),
+                    latitude = log.latitude,
+                    longitude = log.longitude
+                )
+            }
+            val response = api.classifyGpsLogs(request)
+            if (response.isSuccessful && response.body()?.success == true) {
+                response.body()?.data
+                    ?.filter { !it.key.isNullOrBlank() }
+                    ?.associateBy { it.key!! }
+                    ?: emptyMap()
+            } else {
+                emptyMap()
+            }
+        } catch (_: Exception) {
+            emptyMap()
         }
     }
 }

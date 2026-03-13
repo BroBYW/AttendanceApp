@@ -14,6 +14,7 @@ import com.example.attendanceapp.data.network.RetrofitClient
 import kotlinx.coroutines.launch
 
 class HistoryFragment : Fragment() {
+    private lateinit var historyAdapter: AttendanceHistoryAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -30,6 +31,8 @@ class HistoryFragment : Fragment() {
         val layoutHistoryEmpty = view.findViewById<LinearLayout>(R.id.layoutHistoryEmpty)
 
         rvFullHistory.layoutManager = LinearLayoutManager(requireContext())
+        historyAdapter = AttendanceHistoryAdapter(emptyList())
+        rvFullHistory.adapter = historyAdapter
         
         swipeRefresh.setColorSchemeResources(R.color.secondary)
         swipeRefresh.setOnRefreshListener {
@@ -43,8 +46,12 @@ class HistoryFragment : Fragment() {
         if (view == null) return
         swipeRefresh.isRefreshing = true
         viewLifecycleOwner.lifecycleScope.launch {
+            val safeContext = context ?: run {
+                swipeRefresh.isRefreshing = false
+                return@launch
+            }
             try {
-                val apiService = RetrofitClient.getApiService(requireContext())
+                val apiService = RetrofitClient.getApiService(safeContext)
                 val response = apiService.getMyAttendance()
 
                 if (response.isSuccessful && response.body()?.success == true) {
@@ -67,15 +74,17 @@ class HistoryFragment : Fragment() {
                             rvFullHistory.adapter = AttendanceHistoryAdapter(records)
                         }
                     } else {
-                        Toast.makeText(context, "Unexpected response format", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(safeContext, "Unexpected response format", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    Toast.makeText(context, "Failed to load history: ${response.message()}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(safeContext, "Failed to load history: ${response.message()}", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
-                Toast.makeText(context, "Network error: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(safeContext, "Network error: ${e.message}", Toast.LENGTH_SHORT).show()
             } finally {
-                swipeRefresh.isRefreshing = false
+                if (view != null) {
+                    swipeRefresh.isRefreshing = false
+                }
             }
         }
     }
